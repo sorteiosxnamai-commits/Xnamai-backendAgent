@@ -1,12 +1,14 @@
-from dotenv import load_dotenv
 import os
+from dotenv import load_dotenv
 
 load_dotenv()
 
-print("ENV APP:", os.getenv("MERCOS_APPLICATION_TOKEN"))
-print("ENV COMPANY:", os.getenv("MERCOS_COMPANY_TOKEN"))
-
 MERCOS_APPLICATION_TOKEN = os.getenv("MERCOS_APPLICATION_TOKEN")
 MERCOS_COMPANY_TOKEN = os.getenv("MERCOS_COMPANY_TOKEN")
+MERCOS_BASE_URL = os.getenv("MERCOS_BASE_URL")
 
-MERCOS_BASE_URL = "https://sandbox.mercos.com/api/v1"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+
+print("MERCOS_BASE_URL:", MERCOS_BASE_URL)
+print("SUPABASE_URL:", SUPABASE_URL)

@@ -14,16 +14,40 @@ class MercosService:
         self.headers = {
             "ApplicationToken": MERCOS_APPLICATION_TOKEN,
             "CompanyToken": MERCOS_COMPANY_TOKEN,
-            "accept": "application/json"
+            "Accept": "application/json"
         }
 
     def listar_clientes(self):
+        data = (
+            datetime.now() - timedelta(days=365)
+        ).strftime("%Y-%m-%d %H:%M:%S")
+
         response = requests.get(
             f"{MERCOS_BASE_URL}/clientes",
-            headers=self.headers
+            headers=self.headers,
+            params={
+                "alterado_apos": data
+            }
         )
 
+        response.raise_for_status()
+
         return response.json()
+
+    def criar_cliente(self, dados):
+        response = requests.post(
+            f"{MERCOS_BASE_URL}/clientes",
+            headers={
+                **self.headers,
+                "Content-Type": "application/json"
+            },
+            json=dados
+        )
+
+        return {
+            "status_code": response.status_code,
+            "resposta": response.text
+        }
 
     def listar_produtos(self):
         data = (
@@ -38,22 +62,9 @@ class MercosService:
             }
         )
 
+        response.raise_for_status()
+
         return response.json()
-
-    def criar_cliente(self, dados):
-        response = requests.post(
-            f"{MERCOS_BASE_URL}/clientes",
-            headers={
-                **self.headers,
-                "content-type": "application/json"
-            },
-            json=dados
-        )
-
-        return {
-            "status_code": response.status_code,
-            "resposta": response.text
-        }
 
     def listar_pedidos(self):
         data = (
@@ -61,11 +72,13 @@ class MercosService:
         ).strftime("%Y-%m-%d %H:%M:%S")
 
         response = requests.get(
-            "https://sandbox.mercos.com/api/v2/pedidos",
+            f"{MERCOS_BASE_URL}/pedidos",
             headers=self.headers,
             params={
                 "alterado_apos": data
             }
         )
+
+        response.raise_for_status()
 
         return response.json()
