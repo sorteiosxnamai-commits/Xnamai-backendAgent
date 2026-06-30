@@ -1,41 +1,50 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.routes.cliente import router as cliente_router
 from app.routes.produto import router as produto_router
 from app.routes.login import router as login_router
 from app.routes.database import router as database_router
+from app.routes.dashboard import router as dashboard_router
+from app.routes.sincronizacao import router as sincronizacao_router
+from app.routes.pulsedesk import router as pulsedesk_router
+from app.routes.platform import router as platform_router
+from app.routes.conversas import router as conversas_router
+from app.routes.agent import router as agent_router
 
 app = FastAPI(
-    title="Xnamai Backend",
-    version="1.0.0"
+    title="PulseDesk Backend",
+    version="1.0.0",
 )
 
-app.include_router(
-    login_router,
-    prefix="/auth",
-    tags=["Auth"]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-app.include_router(
-    cliente_router,
-    prefix="/mercos",
-    tags=["Mercos"]
-)
+api = APIRouter(prefix="/api")
 
-app.include_router(
-    produto_router,
-    prefix="/mercos",
-    tags=["Mercos"]
-)
+api.include_router(login_router, prefix="/auth", tags=["Auth"])
+api.include_router(pulsedesk_router, tags=["PulseDesk"])
+api.include_router(platform_router, tags=["Platform"])
+api.include_router(conversas_router, tags=["Conversas"])
+api.include_router(agent_router, tags=["Agent"])
+api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
+api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
+api.include_router(database_router, prefix="/database", tags=["Database"])
+api.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
+api.include_router(sincronizacao_router, prefix="/sincronizacao", tags=["Sincronizacao"])
 
-app.include_router(
-    database_router,
-    prefix="/database",
-    tags=["Database"]
-)
+app.include_router(api)
+
 
 @app.get("/")
 def home():
-    return {
-        "status": "online"
-    }
+    return {"status": "online"}

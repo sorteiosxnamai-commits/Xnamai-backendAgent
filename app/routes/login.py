@@ -1,17 +1,25 @@
 from fastapi import APIRouter
-from app.core.security import criar_token
+
+from app.schemas.auth import LoginRequest, RegisterRequest
+from app.services.auth_service import AuthService
 
 router = APIRouter()
+auth_service = AuthService()
 
 
 @router.post("/login")
-def login():
+def login(credentials: LoginRequest):
+    return auth_service.login(
+        email=credentials.email,
+        password=credentials.password,
+    )
 
-    token = criar_token({
-        "usuario": "admin"
-    })
 
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
+@router.post("/register")
+def register(body: RegisterRequest):
+    return auth_service.register(
+        name=body.name,
+        email=body.email,
+        password=body.password,
+        company=body.company,
+    )

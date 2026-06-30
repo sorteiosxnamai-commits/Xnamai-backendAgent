@@ -13,8 +13,7 @@ def verificar_token(
     token = credentials.credentials
 
     try:
-        jwt.get_unverified_claims(token)
-
+        jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return True
 
     except Exception:

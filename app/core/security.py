@@ -1,7 +1,7 @@
 from jose import jwt
 from datetime import datetime, timedelta
 
-SECRET_KEY = "xnamai_secret_key123"
+SECRET_KEY = "xnamai_secret_key"
 ALGORITHM = "HS256"
 
 
