@@ -113,7 +113,7 @@ class VendasService:
                 "id": "conversas",
                 "label": "Contatos / Conversas",
                 "quantidade": conversas_total,
-                "valor": round(pipeline_valor, 2),
+                "valor": 0.0,
                 "tipo": "topo",
             })
 
