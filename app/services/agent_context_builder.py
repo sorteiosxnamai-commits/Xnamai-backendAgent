@@ -12,6 +12,15 @@ def _format_currency(value: float) -> str:
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
+def _safe_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
 def _normalize(text: str) -> str:
     text = unicodedata.normalize("NFD", (text or "").lower())
     return "".join(c for c in text if unicodedata.category(c) != "Mn")
@@ -71,20 +80,32 @@ class AgentContextBuilder:
         customer_detail = None
         orders: list[dict] = []
         if customer_id:
-            customer = obter_cliente(str(customer_id))
-            if customer:
-                customer_detail = dict(customer)
-                pedidos_resp = listar_pedidos(page=1, page_size=500)
-                orders = [
-                    o for o in pedidos_resp.get("data", [])
-                    if str(o.get("customerId")) == str(customer_id)
-                ]
-                customer["ordersCount"] = len(orders)
-                customer["totalSpent"] = sum(float(o.get("total") or 0) for o in orders)
-                customer_detail["orders"] = orders[:10]
+            try:
+                customer = obter_cliente(str(customer_id))
+                if customer:
+                    customer_detail = dict(customer)
+                    pedidos_resp = listar_pedidos(page=1, page_size=100)
+                    orders = [
+                        o for o in pedidos_resp.get("data", [])
+                        if str(o.get("customerId")) == str(customer_id)
+                    ]
+                    customer["ordersCount"] = len(orders)
+                    customer["totalSpent"] = sum(_safe_float(o.get("total")) for o in orders)
+                    customer_detail["orders"] = orders[:10]
+            except Exception:
+                customer = None
+                customer_detail = None
+                orders = []
 
-        products = self._load_relevant_products(search_text)
-        related_orders = self._search_orders(search_text, orders)
+        try:
+            products = self._load_relevant_products(search_text)
+        except Exception:
+            products = []
+
+        try:
+            related_orders = self._search_orders(search_text, orders)
+        except Exception:
+            related_orders = orders[:3]
 
         last_customer_msg = None
         for msg in reversed(messages):
@@ -124,10 +145,13 @@ class AgentContextBuilder:
 
         words = [w for w in re.findall(r"[a-záàâãéêíóôõúç]{4,}", norm) if w not in _STOP_WORDS]
         for word in words[:3]:
-            result = listar_clientes(page=1, page_size=5, search=word)
-            items = result.get("data") or []
-            if items:
-                return items[0].get("id")
+            try:
+                result = listar_clientes(page=1, page_size=5, search=word)
+                items = result.get("data") or []
+                if items:
+                    return items[0].get("id")
+            except Exception:
+                continue
         return None
 
     def _load_relevant_products(self, search_text: str) -> list[dict]:
@@ -135,14 +159,20 @@ class AgentContextBuilder:
         found: dict[str, dict] = {}
 
         for term in terms[:4]:
-            resp = listar_produtos(page=1, page_size=15, search=term)
-            for p in resp.get("data") or []:
-                found[str(p.get("id"))] = p
+            try:
+                resp = listar_produtos(page=1, page_size=15, search=term)
+                for p in resp.get("data") or []:
+                    found[str(p.get("id"))] = p
+            except Exception:
+                continue
 
         if len(found) < 20:
-            resp = listar_produtos(page=1, page_size=40)
-            for p in resp.get("data") or []:
-                found[str(p.get("id"))] = p
+            try:
+                resp = listar_produtos(page=1, page_size=40)
+                for p in resp.get("data") or []:
+                    found[str(p.get("id"))] = p
+            except Exception:
+                pass
 
         return list(found.values())[:40]
 
@@ -174,7 +204,7 @@ class AgentContextBuilder:
         if not products:
             return "Nenhum produto sincronizado — oriente sync Mercos em Configurações."
         return "\n".join(
-            f"- {p.get('code')} | {p.get('name')} | {_format_currency(float(p.get('price') or 0))} | "
+            f"- {p.get('code')} | {p.get('name')} | {_format_currency(_safe_float(p.get('price')))} | "
             f"estoque: {p.get('stock', 0)} un. | categoria: {p.get('category', 'Geral')}"
             for p in products
         )
@@ -240,7 +270,7 @@ class AgentContextBuilder:
                 f"- E-mail: {customer.get('email') or 'N/A'}",
                 f"- Telefone: {customer.get('phone') or 'N/A'}",
                 f"- Cidade: {customer.get('city') or 'N/A'}",
-                f"- Pedidos: {customer.get('ordersCount', 0)} | Lifetime: {_format_currency(float(customer.get('totalSpent') or 0))}",
+                f"- Pedidos: {customer.get('ordersCount', 0)} | Lifetime: {_format_currency(_safe_float(customer.get('totalSpent')))}",
             ])
 
         for label, order_list in [
@@ -253,7 +283,7 @@ class AgentContextBuilder:
                 for order in order_list[:8]:
                     lines.append(
                         f"- Nº {order.get('number')} | status: {order.get('status')} | "
-                        f"{_format_currency(float(order.get('total') or 0))} | "
+                        f"{_format_currency(_safe_float(order.get('total')))} | "
                         f"{order.get('items', 1)} itens | cliente: {order.get('customerName') or '—'}"
                     )
 

@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 import uuid
 
@@ -7,6 +8,8 @@ from app.services.agent_context_builder import AgentContextBuilder
 from app.services.agent_intelligent_engine import generate_reply, generate_suggestion
 from app.services.conversas_service import ConversasService
 from app.services.openai_provider import call_openai, openai_configured
+
+logger = logging.getLogger(__name__)
 
 
 class AgentService:
@@ -49,62 +52,84 @@ class AgentService:
         mode: str = "copilot",
         history: list[dict] | None = None,
     ) -> dict:
-        ctx = self.context_builder.build(conversation_id, customer_id, history, message)
-        system_prompt = self.context_builder.to_prompt(ctx)
         mode = mode or "copilot"
+        conv_id = conversation_id or f"conv-{uuid.uuid4().hex[:8]}"
 
-        ai_reply = call_openai(message, system_prompt, history, mode)
-        if ai_reply:
+        try:
+            ctx = self.context_builder.build(conversation_id, customer_id, history, message)
+            system_prompt = self.context_builder.to_prompt(ctx)
+
+            ai_reply = call_openai(message, system_prompt, history, mode)
+            if ai_reply:
+                return {
+                    "reply": ai_reply,
+                    "conversationId": conv_id,
+                    "source": "openai",
+                }
+
+            reply = generate_reply(message, ctx, mode)
             return {
-                "reply": ai_reply,
-                "conversationId": conversation_id or f"conv-{uuid.uuid4().hex[:8]}",
-                "source": "openai",
+                "reply": reply,
+                "conversationId": conv_id,
+                "source": "intelligent",
             }
-
-        reply = generate_reply(message, ctx, mode)
-        return {
-            "reply": reply,
-            "conversationId": conversation_id or f"conv-{uuid.uuid4().hex[:8]}",
-            "source": "intelligent",
-        }
+        except Exception as exc:
+            logger.exception("Erro no Copiloto chat: %s", exc)
+            return {
+                "reply": (
+                    "Não consegui processar agora. Verifique se Mercos/Supabase estão sincronizados "
+                    f"e tente de novo. (Erro: {str(exc)[:100]})"
+                ),
+                "conversationId": conv_id,
+                "source": "intelligent",
+            }
 
     def suggest(
         self,
         conversation_id: str,
         customer_id: str | None = None,
     ) -> dict:
-        ctx = self.context_builder.build(conversation_id, customer_id)
-        if ctx.get("lastCustomerMessage"):
-            ctx = self.context_builder.build(
-                conversation_id,
-                customer_id,
-                user_message=ctx.get("lastCustomerMessage"),
+        try:
+            ctx = self.context_builder.build(conversation_id, customer_id)
+            if ctx.get("lastCustomerMessage"):
+                ctx = self.context_builder.build(
+                    conversation_id,
+                    customer_id,
+                    user_message=ctx.get("lastCustomerMessage"),
+                )
+            system_prompt = self.context_builder.to_prompt(ctx)
+
+            prompt = (
+                "Analise a conversa e gere JSON com insight, suggestion (mensagem pronta para o cliente) "
+                'e priority (low|medium|high).\n\n'
+                f'Última mensagem do cliente: {ctx.get("lastCustomerMessage") or ""}'
             )
-        system_prompt = self.context_builder.to_prompt(ctx)
 
-        prompt = (
-            "Analise a conversa e gere JSON com insight, suggestion (mensagem pronta para o cliente) "
-            'e priority (low|medium|high).\n\n'
-            f'Última mensagem do cliente: {ctx.get("lastCustomerMessage") or ""}'
-        )
+            raw = call_openai(prompt, system_prompt, [], "suggestion")
+            if raw:
+                match = re.search(r"\{[\s\S]*\}", raw)
+                if match:
+                    try:
+                        parsed = json.loads(match.group(0))
+                        return {
+                            "insight": parsed.get("insight", ""),
+                            "suggestion": parsed.get("suggestion", ""),
+                            "priority": parsed.get("priority", "medium"),
+                            "source": "openai",
+                        }
+                    except json.JSONDecodeError:
+                        pass
 
-        raw = call_openai(prompt, system_prompt, [], "suggestion")
-        if raw:
-            match = re.search(r"\{[\s\S]*\}", raw)
-            if match:
-                try:
-                    parsed = json.loads(match.group(0))
-                    return {
-                        "insight": parsed.get("insight", ""),
-                        "suggestion": parsed.get("suggestion", ""),
-                        "priority": parsed.get("priority", "medium"),
-                        "source": "openai",
-                    }
-                except json.JSONDecodeError:
-                    pass
-
-        suggestion = generate_suggestion(ctx)
-        return {**suggestion, "source": "intelligent"}
+            suggestion = generate_suggestion(ctx)
+            return {**suggestion, "source": "intelligent"}
+        except Exception as exc:
+            logger.exception("Erro no Copiloto suggest: %s", exc)
+            return {
+                "insight": "Copiloto indisponível momentaneamente.",
+                "suggestion": "Olá! Recebemos sua mensagem e retornaremos em breve.",
+                "priority": "medium",
+                "source": "intelligent",
+            }
 
 
 agent_service = AgentService()

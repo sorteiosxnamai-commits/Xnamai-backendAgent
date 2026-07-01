@@ -1,7 +1,10 @@
 import httpx
+import logging
 
 from app.config.settings import OPENAI_API_KEY, OPENAI_MODEL
 from app.services.agent_knowledge import SUGGESTION_BEHAVIOR
+
+logger = logging.getLogger(__name__)
 
 COPILOT_SYSTEM = """
 Você é o **Copiloto IA Elite** do PulseDesk — o especialista comercial e de suporte mais capaz da equipe.
@@ -67,7 +70,7 @@ def call_openai(
     messages: list[dict] = [
         {
             "role": "system",
-            "content": f"{system_prompt}\n\n---\n\n# CONTEXTO EM TEMPO REAL\n\n{system_context}",
+            "content": f"{system_prompt}\n\n---\n\n# CONTEXTO EM TEMPO REAL\n\n{system_context[:80000]}",
         },
     ]
 
@@ -105,5 +108,6 @@ def call_openai(
         response.raise_for_status()
         data = response.json()
         return (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip() or None
-    except Exception:
+    except Exception as exc:
+        logger.warning("OpenAI falhou (%s): %s", mode, exc)
         return None
