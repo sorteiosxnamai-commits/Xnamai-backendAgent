@@ -1,3 +1,5 @@
+import os
+
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -46,3 +48,17 @@ app.include_router(api)
 @app.get("/")
 def home():
     return {"status": "online"}
+
+
+@app.get("/health")
+def health():
+    missing = []
+    if not os.getenv("SUPABASE_URL"):
+        missing.append("SUPABASE_URL")
+    if not os.getenv("SUPABASE_KEY"):
+        missing.append("SUPABASE_KEY")
+    if not os.getenv("JWT_SECRET"):
+        missing.append("JWT_SECRET")
+    if missing:
+        return {"status": "degraded", "missing_env": missing}
+    return {"status": "ok"}
