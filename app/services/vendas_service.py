@@ -28,6 +28,12 @@ def _sum_total(items: list[dict]) -> float:
     return sum(_safe_float(i.get("total")) for i in items)
 
 
+def _pct(part: float, whole: float, cap: float = 100.0) -> float:
+    if not whole:
+        return 0.0
+    return min(cap, round((part / whole) * 100, 1))
+
+
 class VendasService:
 
     def __init__(self):
@@ -86,60 +92,57 @@ class VendasService:
 
         return list(buckets.values())
 
-    def metricas(self) -> dict:
-        pedidos = self._load_pedidos()
-        funil_estagios = self._load_funil()
+    def _montar_funil(
+        self,
+        *,
+        conversas_total: int,
+        funil_estagios: list[dict],
+        pipeline_valor: float,
+        pipeline_qtd: int,
+        pedidos_total: int,
+        volume_bruto: float,
+        shipped: list[dict],
+        delivered: list[dict],
+        valor_retido: float,
+    ) -> list[dict]:
+        """Funil sequencial: contato → oportunidade → pedido → envio → receita."""
+        etapas: list[dict] = []
 
-        by_status: dict[str, list[dict]] = defaultdict(list)
-        for pedido in pedidos:
-            by_status[pedido.get("status") or "pending"].append(pedido)
+        if conversas_total:
+            etapas.append({
+                "id": "conversas",
+                "label": "Contatos / Conversas",
+                "quantidade": conversas_total,
+                "valor": round(pipeline_valor, 2),
+                "tipo": "topo",
+            })
 
-        delivered = by_status["delivered"]
-        shipped = by_status["shipped"]
-        processing = by_status["processing"]
-        pending = by_status["pending"]
-        cancelled = by_status["cancelled"]
+        if pipeline_qtd:
+            etapas.append({
+                "id": "oportunidades",
+                "label": "Oportunidades no funil",
+                "quantidade": pipeline_qtd,
+                "valor": round(pipeline_valor, 2),
+                "tipo": "funil",
+            })
 
-        vendas_fechadas = delivered + shipped
-        em_processamento = pending + processing
-        pedidos_validos = [p for p in pedidos if p.get("status") != "cancelled"]
+        for estagio in funil_estagios:
+            if estagio["dealsCount"] <= 0:
+                continue
+            etapas.append({
+                "id": str(estagio["id"]),
+                "label": estagio["name"],
+                "quantidade": estagio["dealsCount"],
+                "valor": round(estagio["dealsValue"], 2),
+                "tipo": "funil",
+            })
 
-        volume_bruto = _sum_total(pedidos_validos)
-        valor_retido = _sum_total(delivered)
-        valor_total_vendido = _sum_total(vendas_fechadas)
-        valor_pipeline = _sum_total(em_processamento)
-        valor_cancelado = _sum_total(cancelled)
-
-        quantidade_vendas = len(vendas_fechadas) if vendas_fechadas else len(pedidos_validos)
-        ticket_medio = valor_total_vendido / quantidade_vendas if quantidade_vendas else 0
-
-        try:
-            conversas = self.conversas.listar()
-            conversas_ativas = sum(1 for c in conversas if c.get("status") != "closed")
-        except Exception:
-            conversas_ativas = 0
-
-        pipeline_valor = sum(s.get("dealsValue", 0) for s in funil_estagios)
-        pipeline_qtd = sum(s.get("dealsCount", 0) for s in funil_estagios)
-
-        # Funil estilo Mercado Livre: topo amplo → base = receita retida
-        etapas_funil = []
-        if funil_estagios:
-            for estagio in funil_estagios:
-                etapas_funil.append({
-                    "id": estagio["id"],
-                    "label": estagio["name"],
-                    "quantidade": estagio["dealsCount"],
-                    "valor": round(estagio["dealsValue"], 2),
-                    "tipo": "funil",
-                })
-
-        etapas_funil.extend([
+        etapas.extend([
             {
-                "id": "pedidos-abertos",
-                "label": "Pedidos em aberto",
-                "quantidade": len(em_processamento),
-                "valor": round(valor_pipeline, 2),
+                "id": "pedidos-confirmados",
+                "label": "Pedidos confirmados",
+                "quantidade": pedidos_total,
+                "valor": round(volume_bruto, 2),
                 "tipo": "pedido",
             },
             {
@@ -158,25 +161,84 @@ class VendasService:
             },
         ])
 
-        if conversas_ativas and etapas_funil:
-            etapas_funil.insert(0, {
-                "id": "conversas",
-                "label": "Contatos / Conversas",
-                "quantidade": conversas_ativas,
-                "valor": round(pipeline_valor, 2),
-                "tipo": "topo",
-            })
+        if not etapas:
+            return []
 
-        topo_qtd = etapas_funil[0]["quantidade"] if etapas_funil else max(quantidade_vendas, 1)
-        for etapa in etapas_funil:
-            etapa["conversaoPct"] = round((etapa["quantidade"] / topo_qtd) * 100, 1) if topo_qtd else 0
+        topo_qtd = etapas[0]["quantidade"] or 1
+        prev_qtd = topo_qtd
+        for etapa in etapas:
+            etapa["conversaoPct"] = _pct(etapa["quantidade"], topo_qtd)
+            etapa["quedaPct"] = _pct(etapa["quantidade"], prev_qtd)
+            prev_qtd = max(etapa["quantidade"], 1)
 
-        taxa_conversao = round((quantidade_vendas / topo_qtd) * 100, 1) if topo_qtd else 0
-        taxa_retencao = round((valor_retido / volume_bruto) * 100, 1) if volume_bruto else 0
+        return etapas
+
+    def metricas(self) -> dict:
+        pedidos = self._load_pedidos()
+        funil_estagios = self._load_funil()
+
+        by_status: dict[str, list[dict]] = defaultdict(list)
+        for pedido in pedidos:
+            by_status[pedido.get("status") or "pending"].append(pedido)
+
+        delivered = by_status["delivered"]
+        shipped = by_status["shipped"]
+        processing = by_status["processing"]
+        pending = by_status["pending"]
+        cancelled = by_status["cancelled"]
+
+        vendas_concluidas = delivered + shipped
+        em_processamento = pending + processing
+        pedidos_validos = [p for p in pedidos if p.get("status") != "cancelled"]
+
+        volume_bruto = _sum_total(pedidos_validos)
+        valor_retido = _sum_total(delivered)
+        valor_concluido = _sum_total(vendas_concluidas)
+        valor_total_vendido = volume_bruto
+        valor_pipeline = _sum_total(em_processamento)
+        valor_cancelado = _sum_total(cancelled)
+
+        quantidade_vendas = len(pedidos_validos)
+        quantidade_concluidas = len(vendas_concluidas)
+        quantidade_entregues = len(delivered)
+        ticket_medio = valor_total_vendido / quantidade_vendas if quantidade_vendas else 0
+
+        try:
+            conversas = self.conversas.listar()
+            conversas_total = len(conversas)
+        except Exception:
+            conversas_total = 0
+
+        pipeline_valor = sum(s.get("dealsValue", 0) for s in funil_estagios)
+        pipeline_qtd = sum(s.get("dealsCount", 0) for s in funil_estagios)
+
+        etapas_funil = self._montar_funil(
+            conversas_total=conversas_total,
+            funil_estagios=funil_estagios,
+            pipeline_valor=pipeline_valor,
+            pipeline_qtd=pipeline_qtd,
+            pedidos_total=quantidade_vendas,
+            volume_bruto=volume_bruto,
+            shipped=shipped,
+            delivered=delivered,
+            valor_retido=valor_retido,
+        )
+
+        if conversas_total:
+            taxa_conversao = _pct(quantidade_entregues, conversas_total)
+        elif quantidade_vendas:
+            taxa_conversao = _pct(quantidade_entregues, quantidade_vendas)
+        else:
+            taxa_conversao = 0.0
+
+        taxa_retencao = _pct(valor_retido, volume_bruto)
 
         return {
             "quantidadeVendas": quantidade_vendas,
+            "quantidadeConcluidas": quantidade_concluidas,
+            "quantidadeEntregues": quantidade_entregues,
             "valorTotalVendido": round(valor_total_vendido, 2),
+            "valorConcluido": round(valor_concluido, 2),
             "volumeBruto": round(volume_bruto, 2),
             "valorRetido": round(valor_retido, 2),
             "valorPipeline": round(valor_pipeline, 2),
