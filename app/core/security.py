@@ -1,8 +1,7 @@
 from jose import jwt
 from datetime import datetime, timedelta
 
-SECRET_KEY = "xnamai_secret_key"
-ALGORITHM = "HS256"
+from app.config.settings import JWT_ALGORITHM, JWT_SECRET
 
 
 def criar_token(dados: dict):
@@ -12,6 +11,6 @@ def criar_token(dados: dict):
 
     return jwt.encode(
         payload,
-        SECRET_KEY,
-        algorithm=ALGORITHM
+        JWT_SECRET,
+        algorithm=JWT_ALGORITHM,
     )

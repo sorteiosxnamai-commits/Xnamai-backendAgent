@@ -3,6 +3,7 @@ import math
 
 from app.services.supabase_service import supabase
 from app.repositories.dashboard_repository import DashboardRepository
+from app.services.dashboard_service import DashboardService
 
 
 def _paginate(items: list, page: int, page_size: int) -> dict:
@@ -165,40 +166,7 @@ def listar_pedidos(page: int = 1, page_size: int = 10, search: str = "", status:
 
 
 def dashboard_data() -> dict:
-    repo = DashboardRepository()
-    clientes = repo.contar_clientes() or 0
-    produtos = repo.contar_produtos() or 0
-    pedidos = repo.contar_pedidos() or 0
-
-    chart = []
-    for i in range(6, -1, -1):
-        dia = datetime.utcnow() - timedelta(days=i)
-        chart.append({
-            "name": dia.strftime("%d/%m"),
-            "conversas": 0,
-            "pedidos": pedidos // 7 if pedidos else 0,
-            "clientes": clientes // 7 if clientes else 0,
-        })
-
-    return {
-        "stats": {
-            "activeConversations": 0,
-            "closedConversations": 0,
-            "waitingQueue": 0,
-            "avgResponseTime": "0min",
-            "nps": 0,
-            "csat": 0,
-            "aiOnline": True,
-            "campaignsSent": 0,
-            "botResolved": 0,
-        },
-        "conversationsChart": chart,
-        "ordersChart": chart,
-        "responseTimeChart": [
-            {"name": p["name"], "conversas": 0, "pedidos": p["pedidos"], "clientes": p["clientes"]}
-            for p in chart
-        ],
-    }
+    return DashboardService().montar()
 
 
 def mercos_status() -> dict:

@@ -12,3 +12,17 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     company: str | None = Field(default=None, max_length=120)
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10)
+    password: str = Field(min_length=6, max_length=128)
+
+
+class UpdateProfileRequest(BaseModel):
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    company: str | None = Field(default=None, max_length=120)

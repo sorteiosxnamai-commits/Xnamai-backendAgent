@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.services.supabase_service import supabase
 
 
@@ -16,6 +18,32 @@ class UsuarioRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
+    def buscar_por_id(self, usuario_id: str) -> dict | None:
+        resposta = (
+            supabase
+            .table("usuarios")
+            .select("*")
+            .eq("id", usuario_id)
+            .limit(1)
+            .execute()
+        )
+
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
+    def buscar_por_reset_token(self, token: str) -> dict | None:
+        resposta = (
+            supabase
+            .table("usuarios")
+            .select("*")
+            .eq("reset_token", token)
+            .limit(1)
+            .execute()
+        )
+
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
     def criar(self, dados: dict) -> dict:
         resposta = (
             supabase
@@ -26,6 +54,18 @@ class UsuarioRepository:
 
         rows = resposta.data or []
         return rows[0] if rows else dados
+
+    def atualizar(self, usuario_id: str, dados: dict) -> dict | None:
+        resposta = (
+            supabase
+            .table("usuarios")
+            .update({**dados, "updated_at": datetime.utcnow().isoformat()})
+            .eq("id", usuario_id)
+            .execute()
+        )
+
+        rows = resposta.data or []
+        return rows[0] if rows else None
 
     def listar_emails(self) -> list[str]:
         resposta = (
