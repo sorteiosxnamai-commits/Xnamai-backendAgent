@@ -14,6 +14,7 @@ from app.services.pulsedesk_adapter import (
 from app.services.cliente_service import ClienteService
 from app.services.produto_service import ProdutoService
 from app.services.pedido_service import PedidoService
+from app.services.vendas_service import vendas_service
 
 router = APIRouter()
 
@@ -29,6 +30,11 @@ class MercosSyncRequest(BaseModel):
 @router.get("/dashboard")
 def get_dashboard(autorizado=Depends(verificar_token)):
     return dashboard_data()
+
+
+@router.get("/vendas/metricas")
+def get_vendas_metricas(autorizado=Depends(verificar_token)):
+    return vendas_service.metricas()
 
 
 @router.get("/clientes")
