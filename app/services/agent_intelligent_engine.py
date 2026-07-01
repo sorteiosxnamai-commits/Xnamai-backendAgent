@@ -263,7 +263,60 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
             "histórico de clientes em tempo real. Peça resumos, sugestões ou orçamentos."
         )
 
+    contextual = _contextual_copilot_reply(ctx, message)
+    if contextual:
+        return contextual
+
     return suggest_replies(ctx, message)
+
+
+def _contextual_copilot_reply(ctx: dict, message: str) -> str | None:
+    conv = ctx.get("conversation")
+    customer = ctx.get("customer")
+    if not conv and not customer:
+        return None
+
+    intent = detect_intent(ctx, message)
+    name = _first_name(ctx) or (conv or {}).get("customerName", "Cliente")
+    last = ctx.get("lastCustomerMessage") or (conv or {}).get("lastMessage") or ""
+    suggestion = generate_suggestion(ctx)
+
+    lines = [
+        f"**Análise — {name}**",
+        f"• {SENTIMENT.get(intent, intent)}",
+    ]
+    if conv:
+        lines.append(f"• Canal **{conv.get('channel')}** | Status **{conv.get('status')}** | Protocolo **{conv.get('protocol') or '—'}**")
+    if customer:
+        lines.append(
+            f"• Cliente: **{customer.get('ordersCount', 0)} pedidos** · "
+            f"{_format_currency(float(customer.get('totalSpent') or 0))} · {customer.get('city') or '—'}"
+        )
+    if last:
+        lines.append(f"• Última mensagem: _\"{last[:150]}{'…' if len(last) > 150 else ''}\"_")
+
+    orders = ctx.get("orders") or []
+    if orders:
+        o = orders[0]
+        lines.append(f"• Pedido recente: **{o.get('number')}** ({o.get('status')}) — {_format_currency(float(o.get('total') or 0))}")
+
+    product = _find_product(ctx, _combined_text(ctx, message))
+    if product:
+        lines.append(
+            f"• Produto relacionado: **{product.get('name')}** ({product.get('code')}) — "
+            f"{_format_currency(float(product.get('price') or 0))}, estoque **{product.get('stock', 0)}**"
+        )
+
+    lines.extend([
+        "",
+        f"**Insight:** {suggestion['insight']}",
+        "",
+        "**Mensagem sugerida (copiar e enviar):**",
+        f"\"{suggestion['suggestion']}\"",
+        "",
+        "_Comandos: `resuma conversa` · `sugira resposta` · `status pedido` · `catálogo`_",
+    ])
+    return "\n".join(lines)
 
 
 def generate_suggestion(ctx: dict) -> dict:
