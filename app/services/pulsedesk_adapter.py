@@ -170,9 +170,11 @@ def dashboard_data() -> dict:
 
 
 def mercos_status() -> dict:
+    from app.services.mercos_service import mercos_configurado
+
     repo = DashboardRepository()
     return {
-        "connected": True,
+        "connected": mercos_configurado(),
         "lastSync": datetime.utcnow().isoformat(),
         "syncedProducts": repo.contar_produtos() or 0,
         "syncedCustomers": repo.contar_clientes() or 0,

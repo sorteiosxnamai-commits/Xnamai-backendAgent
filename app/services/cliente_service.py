@@ -9,11 +9,15 @@ class ClienteService:
         self.repository = ClienteRepository()
 
     def sincronizar(self):
-
         clientes = self.mercos.listar_clientes()
 
         if isinstance(clientes, dict):
-            return clientes
+            raise RuntimeError(
+                f"Resposta inesperada do Mercos: {clientes.get('mensagem') or clientes}"
+            )
+
+        if not isinstance(clientes, list):
+            raise RuntimeError("Mercos não retornou lista de clientes.")
 
         quantidade = 0
 

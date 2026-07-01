@@ -1,11 +1,14 @@
 import requests
-from datetime import datetime, timedelta
 
 from app.config.settings import (
     MERCOS_APPLICATION_TOKEN,
+    MERCOS_BASE_URL,
     MERCOS_COMPANY_TOKEN,
-    MERCOS_BASE_URL
 )
+
+
+def mercos_configurado() -> bool:
+    return bool(MERCOS_APPLICATION_TOKEN and MERCOS_COMPANY_TOKEN and MERCOS_BASE_URL)
 
 
 class MercosService:
@@ -14,24 +17,30 @@ class MercosService:
         self.headers = {
             "ApplicationToken": MERCOS_APPLICATION_TOKEN,
             "CompanyToken": MERCOS_COMPANY_TOKEN,
-            "Accept": "application/json"
+            "Accept": "application/json",
         }
 
-    def listar_clientes(self):
-        data = (
-            datetime.now() - timedelta(days=365)
-        ).strftime("%Y-%m-%d %H:%M:%S")
+    def _validar_config(self) -> None:
+        if not mercos_configurado():
+            raise RuntimeError(
+                "Mercos não configurado. Defina MERCOS_APPLICATION_TOKEN, "
+                "MERCOS_COMPANY_TOKEN e MERCOS_BASE_URL no Render."
+            )
+
+    def listar_clientes(self, alterado_apos: str | None = None):
+        self._validar_config()
+        params = {}
+        if alterado_apos:
+            params["alterado_apos"] = alterado_apos
 
         response = requests.get(
             f"{MERCOS_BASE_URL}/clientes",
             headers=self.headers,
-            params={
-                "alterado_apos": data
-            }
+            params=params,
+            timeout=60,
         )
 
         response.raise_for_status()
-
         return response.json()
 
     def criar_cliente(self, dados):
@@ -49,34 +58,34 @@ class MercosService:
             "resposta": response.text
         }
 
-    def listar_produtos(self):
-        data = (
-            datetime.now() - timedelta(days=365)
-        ).strftime("%Y-%m-%d %H:%M:%S")
+    def listar_produtos(self, alterado_apos: str | None = None):
+        self._validar_config()
+        params = {}
+        if alterado_apos:
+            params["alterado_apos"] = alterado_apos
 
         response = requests.get(
             f"{MERCOS_BASE_URL}/produtos",
             headers=self.headers,
-            params={
-                "alterado_apos": data
-            }
+            params=params,
+            timeout=60,
         )
 
         response.raise_for_status()
 
         return response.json()
 
-    def listar_pedidos(self):
-        data = (
-            datetime.now() - timedelta(days=365)
-        ).strftime("%Y-%m-%d %H:%M:%S")
+    def listar_pedidos(self, alterado_apos: str | None = None):
+        self._validar_config()
+        params = {}
+        if alterado_apos:
+            params["alterado_apos"] = alterado_apos
 
         response = requests.get(
             f"{MERCOS_BASE_URL}/pedidos",
             headers=self.headers,
-            params={
-                "alterado_apos": data
-            }
+            params=params,
+            timeout=60,
         )
 
         response.raise_for_status()

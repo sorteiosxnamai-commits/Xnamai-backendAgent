@@ -88,22 +88,41 @@ def sincronizar_mercos(
 ):
     tipo = body.type
 
-    if tipo == "customers":
-        resultado = cliente_service.sincronizar()
-        return {"success": True, "message": f"Clientes sincronizados: {resultado.get('clientes_sincronizados', 0)}"}
+    try:
+        if tipo == "customers":
+            resultado = cliente_service.sincronizar()
+            qtd = resultado.get("clientes_sincronizados", 0)
+            return {"success": True, "message": f"Clientes sincronizados: {qtd}"}
 
-    if tipo == "products":
-        resultado = produto_service.sincronizar()
-        return {"success": True, "message": f"Produtos sincronizados: {resultado.get('produtos_sincronizados', 0)}"}
+        if tipo == "products":
+            resultado = produto_service.sincronizar()
+            qtd = resultado.get("produtos_sincronizados", 0)
+            return {"success": True, "message": f"Produtos sincronizados: {qtd}"}
 
-    if tipo == "orders":
-        resultado = pedido_service.sincronizar()
-        return {"success": True, "message": f"Pedidos sincronizados: {resultado.get('pedidos_sincronizados', 0)}"}
+        if tipo == "orders":
+            resultado = pedido_service.sincronizar()
+            qtd = resultado.get("pedidos_sincronizados", 0)
+            return {"success": True, "message": f"Pedidos sincronizados: {qtd}"}
 
-    cliente_service.sincronizar()
-    produto_service.sincronizar()
-    pedido_service.sincronizar()
-    return {"success": True, "message": "Sincronização de todos os dados concluída com sucesso"}
+        c = cliente_service.sincronizar()
+        p = produto_service.sincronizar()
+        o = pedido_service.sincronizar()
+        return {
+            "success": True,
+            "message": (
+                f"Sincronização concluída — "
+                f"clientes: {c.get('clientes_sincronizados', 0)}, "
+                f"produtos: {p.get('produtos_sincronizados', 0)}, "
+                f"pedidos: {o.get('pedidos_sincronizados', 0)}"
+            ),
+        }
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Falha ao sincronizar com Mercos: {exc}",
+        ) from exc
 
 
 @router.post("/auth/logout")
