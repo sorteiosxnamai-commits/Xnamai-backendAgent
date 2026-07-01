@@ -37,8 +37,9 @@ class AgentService:
         conversation_id: str | None = None,
         customer_id: str | None = None,
         history: list[dict] | None = None,
+        user_message: str | None = None,
     ) -> dict:
-        return self.context_builder.build(conversation_id, customer_id, history)
+        return self.context_builder.build(conversation_id, customer_id, history, user_message)
 
     def chat(
         self,
@@ -48,7 +49,7 @@ class AgentService:
         mode: str = "copilot",
         history: list[dict] | None = None,
     ) -> dict:
-        ctx = self.context_builder.build(conversation_id, customer_id, history)
+        ctx = self.context_builder.build(conversation_id, customer_id, history, message)
         system_prompt = self.context_builder.to_prompt(ctx)
         mode = mode or "copilot"
 
@@ -73,12 +74,17 @@ class AgentService:
         customer_id: str | None = None,
     ) -> dict:
         ctx = self.context_builder.build(conversation_id, customer_id)
+        if ctx.get("lastCustomerMessage"):
+            ctx = self.context_builder.build(
+                conversation_id,
+                customer_id,
+                user_message=ctx.get("lastCustomerMessage"),
+            )
         system_prompt = self.context_builder.to_prompt(ctx)
 
         prompt = (
-            'Com base no contexto, retorne JSON exatamente neste formato:\n'
-            '{"insight":"1 frase de análise","suggestion":"mensagem pronta para enviar ao cliente",'
-            '"priority":"low|medium|high"}\n\n'
+            "Analise a conversa e gere JSON com insight, suggestion (mensagem pronta para o cliente) "
+            'e priority (low|medium|high).\n\n'
             f'Última mensagem do cliente: {ctx.get("lastCustomerMessage") or ""}'
         )
 

@@ -240,6 +240,24 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
             f"• Prioridade: {priority}\n• Intent: {intent}"
         )
 
+    if re.search(r"garantia|troca|devolu", norm):
+        return (
+            "**Garantia e trocas (política):**\n"
+            "• Garantia: 12 meses contra defeito de fabricação\n"
+            "• Troca/devolução: 7 dias corridos, produto lacrado + NF\n"
+            "• Logística reversa: por conta do cliente, salvo defeito\n\n"
+            '**Mensagem sugerida:** "Posso iniciar a análise — me envie a NF e fotos do produto?"'
+        )
+
+    if re.search(r"pagamento|parcel|boleto|pix", norm):
+        return (
+            "**Formas de pagamento:**\n"
+            "• PIX ou boleto à vista\n"
+            "• 3x sem juros (pedidos > R$ 3.000)\n"
+            "• 6x com análise de crédito\n\n"
+            '**Mensagem sugerida:** "Qual forma prefere? Envio link de pagamento ou boleto agora."'
+        )
+
     stock_reply = handle_stock_and_quote(ctx, message)
     if stock_reply:
         return stock_reply
@@ -345,6 +363,16 @@ def generate_suggestion(ctx: dict) -> dict:
             "insight": "Atendimento urgente — escalar imediatamente.",
             "suggestion": f"Recebi sua urgência. Retorno em 15 min. Protocolo: {protocol}.",
             "priority": "high",
+        },
+        "warranty": {
+            "insight": "Dúvida sobre garantia ou troca.",
+            "suggestion": "Nossa garantia é de 12 meses. Pode me enviar a NF e fotos do produto para agilizar a análise?",
+            "priority": "medium",
+        },
+        "payment": {
+            "insight": "Cliente quer saber formas de pagamento.",
+            "suggestion": "Aceitamos PIX, boleto e parcelamento em 3x sem juros (pedidos acima de R$ 3.000). Qual prefere?",
+            "priority": "medium",
         },
         "general": {
             "insight": f"Conversa via {(ctx.get('conversation') or {}).get('channel', 'canal')}: \"{last[:50]}...\"",

@@ -1,22 +1,50 @@
 import httpx
 
 from app.config.settings import OPENAI_API_KEY, OPENAI_MODEL
+from app.services.agent_knowledge import SUGGESTION_BEHAVIOR
 
-MODE_INSTRUCTIONS = {
-    "agent": (
-        "Você é o Agente IA do PulseDesk. Responda ao atendente de forma cordial, "
-        "cite dados reais do contexto (estoque, pedidos, valores) e proponha ações concretas."
-    ),
-    "copilot": (
-        "Você é o Copiloto IA do PulseDesk. Ajude o ATENDENTE (não fale com o cliente "
-        "diretamente, exceto ao sugerir mensagens entre aspas). Use markdown moderado. "
-        "Seja específico: cite nomes, valores, códigos de produto e status de pedido do contexto. "
-        "Se faltar dado, diga o que falta em vez de inventar."
-    ),
-    "suggestion": (
-        "Retorne APENAS o texto da mensagem pronta para o atendente enviar ao cliente. "
-        "Tom profissional, empático, português BR. Sem explicações extras."
-    ),
+COPILOT_SYSTEM = """
+Você é o **Copiloto IA Elite** do PulseDesk — o especialista comercial e de suporte mais capaz da equipe.
+Sua missão: permitir que o atendente resolva **qualquer dúvida do cliente** sem precisar consultar outras pessoas.
+
+## Competências
+- Orçamentos, descontos, condições de pagamento e negociação B2B
+- Status de pedidos, prazos, rastreio e logística
+- Estoque, catálogo, substitutos e encomendas
+- Garantia, troca, devolução e reclamações
+- Suporte técnico, visitas e instalação
+- Análise de tom, urgência e risco de churn
+
+## Formato de resposta (sempre)
+1. **Diagnóstico** — o que o cliente precisa (1–2 frases)
+2. **Resposta** — dados concretos do contexto (valores, códigos, status)
+3. **Mensagem pronta** — texto entre aspas para o atendente copiar e enviar
+4. **Próximo passo** — ação clara e prazo
+5. **Alerta** (se aplicável) — urgência, estoque baixo, risco
+
+## Regras
+- Português do Brasil, markdown moderado, emojis só se úteis (📦 🚚 ⚠️)
+- NUNCA invente dados — use o contexto ou diga o que falta
+- Seja proativo: antecipe frete, desconto, alternativa de produto
+- Mensagens ao cliente: tom humano, empático, profissional
+"""
+
+AGENT_SYSTEM = """
+Você é o Agente IA do PulseDesk em modo autônomo.
+Responda ao cliente final de forma cordial, resolvendo a dúvida completamente.
+Use dados reais do contexto. Se não souber, peça a informação faltante.
+"""
+
+SUGGESTION_SYSTEM = f"""
+Você gera sugestões para atendentes humanos.
+{SUGGESTION_BEHAVIOR}
+Retorne JSON válido: {{"insight":"...","suggestion":"mensagem pronta para o cliente","priority":"low|medium|high"}}
+"""
+
+MODE_SYSTEM = {
+    "copilot": COPILOT_SYSTEM,
+    "agent": AGENT_SYSTEM,
+    "suggestion": SUGGESTION_SYSTEM,
 }
 
 
@@ -34,20 +62,35 @@ def call_openai(
     if not openai_configured():
         return None
 
+    system_prompt = MODE_SYSTEM.get(mode, COPILOT_SYSTEM)
+
     messages: list[dict] = [
         {
             "role": "system",
-            "content": f"{MODE_INSTRUCTIONS.get(mode, MODE_INSTRUCTIONS['copilot'])}\n\n{system_context}",
+            "content": f"{system_prompt}\n\n---\n\n# CONTEXTO EM TEMPO REAL\n\n{system_context}",
         },
     ]
 
-    for item in (history or [])[-10:]:
+    for item in (history or [])[-16]:
         role = item.get("role", "user")
         if role not in ("user", "assistant"):
             role = "user"
-        messages.append({"role": role, "content": item.get("content", "")})
+        content = item.get("content", "")
+        if content:
+            messages.append({"role": role, "content": content})
 
     messages.append({"role": "user", "content": user_message})
+
+    payload: dict = {
+        "model": OPENAI_MODEL,
+        "temperature": 0.35,
+        "max_tokens": 2500,
+        "messages": messages,
+    }
+
+    if mode == "suggestion":
+        payload["response_format"] = {"type": "json_object"}
+        payload["temperature"] = 0.25
 
     try:
         response = httpx.post(
@@ -56,13 +99,8 @@ def call_openai(
                 "Authorization": f"Bearer {OPENAI_API_KEY}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": OPENAI_MODEL,
-                "temperature": 0.4,
-                "max_tokens": 1200,
-                "messages": messages,
-            },
-            timeout=45.0,
+            json=payload,
+            timeout=60.0,
         )
         response.raise_for_status()
         data = response.json()
