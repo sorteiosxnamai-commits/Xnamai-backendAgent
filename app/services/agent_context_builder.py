@@ -371,6 +371,16 @@ class AgentContextBuilder:
             ctx.get("productsCatalog") or "Sem produtos.",
         ])
 
+        user_msg = ctx.get("userMessage") or ""
+        if user_msg and detect_intent(ctx, user_msg) == "sales_metrics":
+            lines.extend([
+                "",
+                "### Instrução para esta pergunta (métricas/funil)",
+                "- Interprete os números: o que está indo bem, onde há gargalo, o que priorizar.",
+                "- Diferencie pedidos Mercos (vendas reais) de oportunidades CRM (pipeline).",
+                "- Cite valores exatos do contexto; não liste todas as etapas sem explicar.",
+            ])
+
         return "\n".join(lines)
 
 

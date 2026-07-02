@@ -163,8 +163,12 @@ def handle_sales_metrics(ctx: dict, message: str | None = None) -> str | None:
     metrics = ctx.get("salesMetrics") or {}
     if not metrics:
         return (
-            "Métricas de venda indisponíveis no momento. "
-            "Verifique os pedidos no Mercos ou abra a página Relatórios."
+            "Diagnóstico:\n"
+            "Consulta sobre vendas ou funil, mas os dados ainda não estão disponíveis.\n\n"
+            "Análise:\n"
+            "Sincronize pedidos via Mercos em Configurações e confira a página Relatórios.\n\n"
+            "Próximo passo:\n"
+            "Rodar sync Mercos e repetir a pergunta em alguns minutos."
         )
 
     qtd = metrics.get("quantidadeVendas", 0)
@@ -180,43 +184,57 @@ def handle_sales_metrics(ctx: dict, message: str | None = None) -> str | None:
     oportunidades = metrics.get("pipelineNegocios", 0)
     pipeline_valor = float(metrics.get("pipelineValor") or 0)
 
-    lines = [
-        "Métricas de venda",
-        "",
-        "Resumo comercial",
-        f"Vendas confirmadas: {qtd}",
-        f"Valor vendido: {_format_currency(valor)}",
-        f"Enviadas ou entregues: {concluidas}",
-        f"Entregues: {entregues}",
-        f"Receita retida: {_format_currency(retido)} ({taxa_ret}% do bruto)",
-        f"Pipeline em aberto: {_format_currency(pipeline)}",
-        f"Volume bruto: {_format_currency(bruto)}",
-        f"Ticket médio: {_format_currency(ticket)}",
-        f"Oportunidades no funil: {oportunidades} ({_format_currency(pipeline_valor)})",
-        f"Conversão contato para entrega: {taxa_conv}%",
+    em_aberto = max(qtd - entregues, 0)
+    pct_entregue = round((entregues / qtd) * 100, 1) if qtd else 0.0
+
+    analise = [
+        f"{qtd} pedidos confirmados totalizam {_format_currency(valor)} (ticket médio {_format_currency(ticket)}).",
+        f"{entregues} já foram entregues ({pct_entregue}% dos pedidos), gerando {_format_currency(retido)} de receita retida ({taxa_ret}% do volume bruto).",
     ]
+    if pipeline > 0:
+        analise.append(
+            f"Ainda há {_format_currency(pipeline)} em pipeline operacional ({em_aberto} pedidos entre pendentes e processando)."
+        )
+    if oportunidades:
+        analise.append(
+            f"No funil comercial há {oportunidades} oportunidades somando {_format_currency(pipeline_valor)} — são negócios em CRM, distintos dos pedidos Mercos."
+        )
+    if taxa_conv:
+        analise.append(f"Conversao contato para entrega: {taxa_conv}%.")
 
     funil = metrics.get("funil") or []
+    gargalo = None
     if funil:
-        lines.extend(["", "Funil de vendas"])
-        for step in funil[:6]:
-            val = float(step.get("valor") or 0)
-            valor_txt = _format_currency(val) if val > 0 else "sem valor monetário"
-            lines.append(
-                f"{step.get('label')}: {step.get('quantidade', 0)} unidades, "
-                f"{valor_txt}, {step.get('conversaoPct', 0)}% do topo"
-            )
+        etapas_pedido = [s for s in funil if s.get("tipo") in ("pedido", "receita")]
+        if len(etapas_pedido) >= 2:
+            for i in range(1, len(etapas_pedido)):
+                prev = etapas_pedido[i - 1].get("quantidade", 0)
+                curr = etapas_pedido[i].get("quantidade", 0)
+                if prev and curr < prev * 0.7:
+                    gargalo = etapas_pedido[i].get("label")
+                    break
+        funil_txt = "; ".join(
+            f"{step.get('label')}: {step.get('quantidade', 0)} ({step.get('conversaoPct', 0)}% do topo)"
+            for step in funil[:5]
+        )
+        analise.append(f"Funil: {funil_txt}.")
+        if gargalo:
+            analise.append(f"Possível gargalo na etapa \"{gargalo}\" — vale priorizar follow-up.")
 
-    lines.extend([
-        "",
-        "Detalhes completos na página Relatórios.",
-        "",
-        "Sugestão de resposta:",
-        f"Temos {qtd} pedidos confirmados totalizando {_format_currency(valor)}. "
-        f"{entregues} já foram entregues, com {_format_currency(retido)} de receita concretizada.",
+    proximo = "Acompanhar pedidos em aberto e converter oportunidades quentes do funil."
+    if pipeline > retido:
+        proximo = f"Priorizar fechamento dos {_format_currency(pipeline)} em pipeline antes de buscar novos leads."
+
+    return "\n\n".join([
+        "Diagnóstico:\n"
+        "O atendente consultou performance comercial e funil de vendas com dados reais da plataforma.",
+        "Análise:\n" + " ".join(analise),
+        "Mensagem pronta:\n"
+        f"\"Hoje temos {qtd} vendas confirmadas ({_format_currency(valor)}), "
+        f"com {entregues} entregues e {_format_currency(retido)} já concretizados. "
+        f"Estou acompanhando {em_aberto} pedido(s) ainda em andamento.\"",
+        f"Próximo passo:\n{proximo}",
     ])
-
-    return "\n".join(lines)
 
 
 def handle_stock_and_quote(ctx: dict, message: str) -> str | None:
@@ -367,6 +385,17 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
     contextual = _contextual_copilot_reply(ctx, message)
     if contextual:
         return contextual
+
+    if mode == "copilot" and not ctx.get("conversation") and not ctx.get("customer"):
+        return (
+            "Diagnóstico:\n"
+            "Posso ajudar com dados reais do Mercos e Supabase.\n\n"
+            "Análise:\n"
+            "Use os atalhos abaixo ou pergunte sobre métricas de venda, funil, catálogo, "
+            "status de pedido, orçamento ou resumo de conversa (informe o nome do cliente).\n\n"
+            "Próximo passo:\n"
+            "Escolha uma conversa na Central de Atendimento para respostas com contexto completo."
+        )
 
     return suggest_replies(ctx, message)
 

@@ -5,11 +5,7 @@ import uuid
 
 from app.config.settings import OPENAI_MODEL
 from app.services.agent_context_builder import AgentContextBuilder
-from app.services.agent_intelligent_engine import (
-    generate_reply,
-    generate_suggestion,
-    handle_sales_metrics,
-)
+from app.services.agent_intelligent_engine import generate_reply, generate_suggestion
 from app.services.conversas_service import ConversasService
 from app.services.openai_provider import call_openai, openai_configured
 
@@ -77,28 +73,18 @@ class AgentService:
             logger.exception("Erro ao montar contexto do Copiloto: %s", exc)
             ctx = self._minimal_context(message)
 
-        try:
-            sales_reply = handle_sales_metrics(ctx, message)
-            if sales_reply:
-                return {
-                    "reply": sales_reply,
-                    "conversationId": conv_id,
-                    "source": "intelligent",
-                }
-        except Exception as exc:
-            logger.warning("Resposta de métricas de venda falhou: %s", exc)
-
-        try:
-            system_prompt = self.context_builder.to_prompt(ctx)
-            ai_reply = call_openai(message, system_prompt, history, mode)
-            if ai_reply:
-                return {
-                    "reply": ai_reply,
-                    "conversationId": conv_id,
-                    "source": "openai",
-                }
-        except Exception as exc:
-            logger.warning("OpenAI no Copiloto falhou: %s", exc)
+        if openai_configured():
+            try:
+                system_prompt = self.context_builder.to_prompt(ctx)
+                ai_reply = call_openai(message, system_prompt, history, mode)
+                if ai_reply:
+                    return {
+                        "reply": ai_reply,
+                        "conversationId": conv_id,
+                        "source": "openai",
+                    }
+            except Exception as exc:
+                logger.warning("OpenAI no Copiloto falhou: %s", exc)
 
         try:
             reply = generate_reply(message, ctx, mode)
