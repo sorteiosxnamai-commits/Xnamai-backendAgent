@@ -117,6 +117,38 @@ class PlatformRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
+    def get_active_chatbot(self, channel: str) -> dict | None:
+        resposta = (
+            supabase
+            .table("chatbot_fluxos")
+            .select("*")
+            .eq("channel", channel)
+            .eq("active", True)
+            .order("name")
+            .limit(1)
+            .execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
+    def increment_chatbot_stats(
+        self,
+        flow_id: str,
+        triggers_delta: int = 0,
+        resolved_delta: int = 0,
+    ) -> dict | None:
+        flow = self.get_chatbot(flow_id)
+        if not flow:
+            return None
+        dados: dict = {}
+        if triggers_delta:
+            dados["triggers"] = int(flow.get("triggers") or 0) + triggers_delta
+        if resolved_delta:
+            dados["resolved"] = int(flow.get("resolved") or 0) + resolved_delta
+        if not dados:
+            return flow
+        return self.update_chatbot(flow_id, dados)
+
     # Integrações
     def list_integracoes(self) -> list[dict]:
         resposta = supabase.table("integracoes").select("*").order("name").execute()

@@ -211,6 +211,14 @@ class WhatsAppService:
             "external_id": external_id,
             "provider_status": "received",
         })
+
+        try:
+            from app.services.chatbot_service import chatbot_service
+
+            chatbot_service.handle_inbound(str(conversa["id"]), content, "whatsapp")
+        except Exception as exc:
+            logger.warning("Chatbot runtime falhou no WhatsApp: %s", exc)
+
         return True
 
     def _processar_status(self, status: dict) -> None:

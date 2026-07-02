@@ -1,10 +1,13 @@
 from datetime import datetime, timedelta
+import logging
 
 from fastapi import HTTPException
 
 from app.repositories.conversa_repository import ConversaRepository
 from app.repositories.mensagem_repository import MensagemRepository
 from app.repositories.usuario_repository import UsuarioRepository
+
+logger = logging.getLogger(__name__)
 
 PERFIL_DEPARTAMENTO = {
     "admin": "Comercial",
@@ -146,6 +149,14 @@ class ConversasService:
                 content.strip(),
                 str(mensagem.get("id")),
             )
+        elif sender == "customer":
+            try:
+                from app.services.chatbot_service import chatbot_service
+
+                channel = conversa.get("channel") or "whatsapp"
+                chatbot_service.handle_inbound(conversa_id, content.strip(), channel)
+            except Exception as exc:
+                logger.warning("Chatbot runtime falhou: %s", exc)
 
         return _map_mensagem(mensagem)
 

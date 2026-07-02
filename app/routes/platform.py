@@ -42,6 +42,11 @@ class ChatbotPatch(BaseModel):
     active: bool | None = None
 
 
+class ChatbotTestRequest(BaseModel):
+    conversationId: str | None = None
+    message: str | None = None
+
+
 @router.get("/canais")
 def get_canais(autorizado=Depends(verificar_token)):
     return platform_service.get_channels()
@@ -121,6 +126,26 @@ def update_chatbot(flow_id: str, body: ChatbotPatch, autorizado=Depends(verifica
     if not flow:
         raise HTTPException(status_code=404, detail="Fluxo não encontrado")
     return flow
+
+
+@router.post("/chatbot/fluxos/{flow_id}/testar")
+def testar_chatbot(
+    flow_id: str,
+    body: ChatbotTestRequest | None = None,
+    autorizado=Depends(verificar_token),
+):
+    from app.services.chatbot_service import chatbot_service
+
+    try:
+        return chatbot_service.test_flow(
+            flow_id,
+            conversation_id=body.conversationId if body else None,
+            message=body.message if body else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Teste do robô falhou: {exc}") from exc
 
 
 @router.get("/integracoes")
