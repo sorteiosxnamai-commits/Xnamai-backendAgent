@@ -75,7 +75,7 @@ def _map_pedido(row: dict, clientes_por_id: dict | None = None) -> dict:
         "customerName": cliente_nome,
         "status": status_map.get(raw_status, "pending"),
         "total": float(row.get("valor_total") or row.get("total") or 0),
-        "createdAt": row.get("created_at") or datetime.utcnow().isoformat(),
+        "createdAt": row.get("data_pedido") or row.get("created_at") or datetime.utcnow().isoformat(),
         "items": int(row.get("quantidade_itens") or row.get("itens") or 1),
     }
 
@@ -117,9 +117,29 @@ def obter_cliente(cliente_id: str) -> dict | None:
         return None
 
     cliente = _map_cliente(rows[0])
-    cliente["orders"] = []
+    mercos_id = str(rows[0].get("mercos_id") or cliente_id)
+
+    try:
+        pedidos_resp = (
+            supabase
+            .table("pedidos")
+            .select("*")
+            .eq("cliente_mercos_id", mercos_id)
+            .order("data_pedido", desc=True)
+            .execute()
+        )
+        pedidos_rows = pedidos_resp.data or []
+    except Exception:
+        pedidos_rows = []
+
+    pedidos = [_map_pedido(row) for row in pedidos_rows]
+    cliente["orders"] = pedidos
+    cliente["ordersCount"] = len(pedidos)
+    cliente["totalSpent"] = round(sum(float(p.get("total") or 0) for p in pedidos), 2)
     cliente["purchasedProducts"] = []
     cliente["lastService"] = cliente["lastContact"]
+    if pedidos:
+        cliente["lastContact"] = pedidos[0].get("createdAt") or cliente["lastContact"]
     return cliente
 
 
@@ -170,25 +190,59 @@ def dashboard_data() -> dict:
 
 
 def mercos_status() -> dict:
+    from app.repositories.mercos_sync_repository import MercosSyncRepository
     from app.services.mercos_service import mercos_configurado
+    from app.services.pedido_service import PedidoService
 
     repo = DashboardRepository()
+    sync_repo = MercosSyncRepository()
+    pedido_service = PedidoService()
+
+    last_sync = sync_repo.ultima_sincronizacao("orders") or sync_repo.ultima_sincronizacao("all")
+    resumo = pedido_service.resumo_situacoes()
+
     return {
         "connected": mercos_configurado(),
-        "lastSync": datetime.utcnow().isoformat(),
+        "lastSync": last_sync or datetime.utcnow().isoformat(),
         "syncedProducts": repo.contar_produtos() or 0,
         "syncedCustomers": repo.contar_clientes() or 0,
         "syncedOrders": repo.contar_pedidos() or 0,
+        "orderStatusBreakdown": resumo.get("breakdown") or [],
+        "allOrdersProcessing": resumo.get("allOrdersProcessing", False),
+        "retainedRevenue": resumo.get("retainedRevenue", 0),
     }
 
 
 def mercos_logs() -> list:
+    from app.repositories.mercos_sync_repository import MercosSyncRepository
+
+    logs = MercosSyncRepository().listar_recentes(12)
+    if not logs:
+        return [
+            {
+                "id": "seed",
+                "type": "orders",
+                "status": "info",
+                "message": "Nenhuma sincronização registrada ainda — use Sincronizar Pedidos.",
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        ]
+
+    type_map = {
+        "orders": "orders",
+        "products": "products",
+        "customers": "customers",
+        "all": "all",
+        "funil": "all",
+    }
+
     return [
         {
-            "id": "1",
-            "type": "all",
-            "status": "success",
-            "message": "Integração Mercos ativa",
-            "timestamp": datetime.utcnow().isoformat(),
+            "id": str(row.get("id") or ""),
+            "type": type_map.get(row.get("tipo") or "orders", "orders"),
+            "status": row.get("status") or "success",
+            "message": row.get("mensagem") or "",
+            "timestamp": row.get("created_at") or datetime.utcnow().isoformat(),
         }
+        for row in logs
     ]

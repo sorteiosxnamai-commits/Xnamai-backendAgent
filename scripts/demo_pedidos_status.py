@@ -1,4 +1,7 @@
-"""Marca pedidos no Supabase como enviados/entregues para demo de métricas.
+"""Marca pedidos no Supabase como enviados/entregues para demo TEMPORÁRIA de métricas.
+
+DEPRECATED para produção — use status permanentes no sandbox Mercos (Etapa 4).
+Validação: PYTHONPATH=. python scripts/validate_pedidos_mercos.py
 
 Use quando os pedidos no Mercos sandbox ainda estão todos em Processando (status 2).
 Após alterar status no Mercos, rode sync — estes valores serão sobrescritos.

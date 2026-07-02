@@ -1,5 +1,38 @@
-from app.services.mercos_service import MercosService
+from app.repositories.mercos_sync_repository import MercosSyncRepository
 from app.repositories.pedido_repository import PedidoRepository
+from app.services.mercos_service import MercosService
+
+SITUACAO_LABELS = {
+    "1": "Pendente",
+    "2": "Processando",
+    "3": "Enviado",
+    "4": "Entregue",
+    "5": "Cancelado",
+}
+
+
+def _extrair_data_pedido(pedido: dict) -> str | None:
+    for key in ("data_emissao", "data_criacao", "data_pedido", "created_at"):
+        valor = pedido.get(key)
+        if valor:
+            return str(valor)
+    return None
+
+
+def _contar_itens(pedido: dict) -> int:
+    items = pedido.get("items") or pedido.get("itens") or []
+    if items:
+        total = 0
+        for item in items:
+            try:
+                total += int(item.get("quantidade") or 1)
+            except (TypeError, ValueError):
+                total += 1
+        return max(total, len(items))
+    try:
+        return max(1, int(pedido.get("quantidade_itens") or 1))
+    except (TypeError, ValueError):
+        return 1
 
 
 class PedidoService:
@@ -7,9 +40,57 @@ class PedidoService:
     def __init__(self):
         self.mercos = MercosService()
         self.repository = PedidoRepository()
+        self.sync_logs = MercosSyncRepository()
 
-    def sincronizar(self):
-        pedidos = self.mercos.listar_pedidos()
+    def _mapear_pedido(self, pedido: dict) -> dict:
+        return {
+            "mercos_id": pedido.get("id"),
+            "numero": str(pedido.get("numero") or pedido.get("id") or ""),
+            "cliente_mercos_id": pedido.get("cliente_id"),
+            "valor_total": pedido.get("total") or 0,
+            "situacao": str(pedido.get("status") or "2"),
+            "quantidade_itens": _contar_itens(pedido),
+            "data_pedido": _extrair_data_pedido(pedido),
+            "ultima_alteracao": pedido.get("ultima_alteracao"),
+        }
+
+    def resumo_situacoes(self) -> dict:
+        rows = self.repository.listar()
+        breakdown: dict[str, dict] = {}
+        retained = 0.0
+
+        for row in rows:
+            code = str(row.get("situacao") or "2")
+            valor = float(row.get("valor_total") or 0)
+            if code not in breakdown:
+                breakdown[code] = {
+                    "code": code,
+                    "label": SITUACAO_LABELS.get(code, code),
+                    "count": 0,
+                    "value": 0.0,
+                }
+            breakdown[code]["count"] += 1
+            breakdown[code]["value"] += valor
+            if code in ("3", "4"):
+                retained += valor
+
+        items = sorted(breakdown.values(), key=lambda item: item["code"])
+        total = len(rows)
+        processing_only = total > 0 and len(items) == 1 and items[0]["code"] == "2"
+
+        return {
+            "total": total,
+            "breakdown": items,
+            "retainedRevenue": round(retained, 2),
+            "allOrdersProcessing": processing_only,
+        }
+
+    def sincronizar(self, *, incremental: bool = True) -> dict:
+        alterado_apos = None
+        if incremental:
+            alterado_apos = self.sync_logs.ultima_sincronizacao("orders")
+
+        pedidos = self.mercos.listar_pedidos(alterado_apos=alterado_apos)
 
         if isinstance(pedidos, dict):
             return pedidos
@@ -17,19 +98,28 @@ class PedidoService:
         quantidade = 0
 
         for pedido in pedidos:
-            items = pedido.get("items") or []
-            dados = {
-                "mercos_id": pedido.get("id"),
-                "numero": str(pedido.get("numero") or pedido.get("id") or ""),
-                "cliente_mercos_id": pedido.get("cliente_id"),
-                "valor_total": pedido.get("total") or 0,
-                "situacao": str(pedido.get("status") or "pendente"),
-            }
-
-            self.repository.salvar(dados)
+            self.repository.salvar(self._mapear_pedido(pedido))
             quantidade += 1
 
+        resumo = self.resumo_situacoes()
+        mensagem = f"Pedidos sincronizados: {quantidade}."
+        if resumo["allOrdersProcessing"]:
+            mensagem += (
+                " Todos estão em Processando — altere status no sandbox Mercos "
+                "(Pedidos → Enviado/Entregue) e sincronize de novo para métricas permanentes."
+            )
+        elif resumo["retainedRevenue"] > 0:
+            mensagem += f" Receita retida: R$ {resumo['retainedRevenue']:,.2f}.".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        self.sync_logs.registrar(
+            tipo="orders",
+            mensagem=mensagem,
+            quantidade=quantidade,
+            resumo=resumo,
+        )
+
         return {
-            "mensagem": "Sincronização concluída.",
+            "mensagem": mensagem,
             "pedidos_sincronizados": quantidade,
+            "resumo": resumo,
         }

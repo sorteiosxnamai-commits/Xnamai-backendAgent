@@ -18,12 +18,37 @@ from app.services.cliente_service import ClienteService
 from app.services.produto_service import ProdutoService
 from app.services.pedido_service import PedidoService
 from app.services.vendas_service import vendas_service
+from app.repositories.mercos_sync_repository import MercosSyncRepository
 
 router = APIRouter()
 
 cliente_service = ClienteService()
 produto_service = ProdutoService()
 pedido_service = PedidoService()
+sync_logs = MercosSyncRepository()
+
+
+def _registrar_sync(tipo: str, mensagem: str, quantidade: int = 0) -> None:
+    sync_logs.registrar(tipo=tipo, mensagem=mensagem, quantidade=quantidade)
+
+
+def _sincronizar_funil_apos_pedidos() -> str:
+    from app.services.funil_sync_service import funil_sync_service
+
+    try:
+        resultado = funil_sync_service.sincronizar()
+        mensagem = resultado.get("message") or "Funil sincronizado."
+        sync_logs.registrar(
+            tipo="funil",
+            mensagem=mensagem,
+            quantidade=resultado.get("dealsCreated") or 0,
+            resumo=resultado,
+        )
+        return mensagem
+    except Exception as exc:
+        aviso = f"Pedidos OK, mas funil não sincronizou: {exc}"
+        sync_logs.registrar(tipo="funil", mensagem=aviso, status="error")
+        return aviso
 
 
 class MercosSyncRequest(BaseModel):
@@ -128,32 +153,46 @@ def sincronizar_mercos(
         if tipo == "customers":
             resultado = cliente_service.sincronizar()
             qtd = resultado.get("clientes_sincronizados", 0)
-            return {"success": True, "message": f"Clientes sincronizados: {qtd}"}
+            msg = f"Clientes sincronizados: {qtd}"
+            _registrar_sync("customers", msg, qtd)
+            return {"success": True, "message": msg}
 
         if tipo == "products":
             resultado = produto_service.sincronizar()
             qtd = resultado.get("produtos_sincronizados", 0)
-            return {"success": True, "message": f"Produtos sincronizados: {qtd}"}
+            msg = f"Produtos sincronizados: {qtd}"
+            _registrar_sync("products", msg, qtd)
+            return {"success": True, "message": msg}
 
         if tipo == "orders":
             resultado = pedido_service.sincronizar()
             qtd = resultado.get("pedidos_sincronizados", 0)
-            return {"success": True, "message": f"Pedidos sincronizados: {qtd}"}
+            msg = resultado.get("mensagem") or f"Pedidos sincronizados: {qtd}"
+            funil_msg = _sincronizar_funil_apos_pedidos()
+            return {
+                "success": True,
+                "message": f"{msg} {funil_msg}",
+                "resumo": resultado.get("resumo"),
+            }
 
         c = cliente_service.sincronizar()
         time.sleep(6)
         p = produto_service.sincronizar()
         time.sleep(6)
-        o = pedido_service.sincronizar()
-        return {
-            "success": True,
-            "message": (
-                f"Sincronização concluída — "
-                f"clientes: {c.get('clientes_sincronizados', 0)}, "
-                f"produtos: {p.get('produtos_sincronizados', 0)}, "
-                f"pedidos: {o.get('pedidos_sincronizados', 0)}"
-            ),
-        }
+        o = pedido_service.sincronizar(incremental=False)
+        msg = (
+            f"Sincronização concluída — "
+            f"clientes: {c.get('clientes_sincronizados', 0)}, "
+            f"produtos: {p.get('produtos_sincronizados', 0)}, "
+            f"pedidos: {o.get('pedidos_sincronizados', 0)}"
+        )
+        _registrar_sync(
+            "all",
+            msg,
+            (c.get("clientes_sincronizados", 0) + p.get("produtos_sincronizados", 0) + o.get("pedidos_sincronizados", 0)),
+        )
+        funil_msg = _sincronizar_funil_apos_pedidos()
+        return {"success": True, "message": f"{msg}. {funil_msg}", "resumo": o.get("resumo")}
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
