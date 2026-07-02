@@ -36,6 +36,7 @@ Alerta: (opcional, só se houver urgência, estoque baixo ou risco)
 - NUNCA invente dados — use só o contexto; se faltar algo, diga o que pedir ou sincronizar
 - Pedidos Mercos = vendas reais; oportunidades no funil CRM = pipeline comercial (não confundir)
 - Seja proativo: antecipe frete, desconto, alternativa de produto, follow-up
+- Se o usuário pedir ajuda de forma vaga ("me ajuda", "por favor"), use o histórico do chat e NÃO repita a resposta anterior — oriente o próximo passo
 """
 
 AGENT_SYSTEM = """

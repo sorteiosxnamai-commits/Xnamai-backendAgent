@@ -40,6 +40,104 @@ def _combined_text(ctx: dict, message: str | None = None) -> str:
     return " ".join(parts)
 
 
+def _is_vague_followup(message: str) -> bool:
+    norm = _normalize(message).strip()
+    if not norm:
+        return False
+    if re.search(
+        r"\b(pedido|orcamento|orçamento|catalogo|catálogo|funil|vendas|preco|preço|"
+        r"estoque|status|rastreio|entrega|resumo|sugest|garantia|pagamento|protocolo|"
+        r"metricas|métricas|faturamento)\b",
+        norm,
+    ):
+        return False
+    words = norm.split()
+    if len(words) <= 10 and re.search(
+        r"\b(ajud|help|socorro|nao entendi|não entendi|expli|como assim|e agora|"
+        r"o que faco|o que faço|nao ficou claro|pode me|consegue me|preciso de ajuda)\b",
+        norm,
+    ):
+        return True
+    return len(words) <= 4 and bool(re.search(r"\b(por favor|please|obrigad|sim|ok|certo)\b", norm))
+
+
+def _last_ai_message(ctx: dict) -> str:
+    for msg in reversed(ctx.get("messages") or []):
+        if msg.get("sender") == "ai":
+            return msg.get("content") or ""
+    return ""
+
+
+def _is_tracking_question(message: str) -> bool:
+    norm = _normalize(message)
+    return bool(re.search(
+        r"\b(pedido|pedidos|entrega|entregue|entregar|rastreio|rastrear|rastreamento|"
+        r"chega|chegar|transportadora|status do pedido|onde esta|onde está)\b|\d{3,}",
+        norm,
+    ))
+
+
+def handle_vague_followup(ctx: dict, message: str) -> str | None:
+    if not _is_vague_followup(message):
+        return None
+
+    last_ai = _last_ai_message(ctx)
+    if not last_ai:
+        return None
+
+    norm_ai = _normalize(last_ai)
+    customer = ctx.get("customer") or {}
+    conv = ctx.get("conversation") or {}
+    client_name = customer.get("name") or conv.get("customerName") or "o cliente"
+
+    if re.search(r"rastreamento|rastreio|entregue|transito|separacao|pedido", norm_ai):
+        order = _find_order(ctx, message)
+        status = (order or {}).get("status", "delivered")
+        num = (order or {}).get("number", "—")
+        total = _format_currency(float((order or {}).get("total") or 0))
+
+        if status == "delivered":
+            return "\n\n".join([
+                "Diagnóstico:\n"
+                f"Você pediu ajuda sobre como proceder depois de informar a entrega do pedido {num} ({client_name}).",
+                "Análise:\n"
+                f"O pedido ({total}) já está entregue — não repita o status. "
+                "Confirme se o cliente recebeu tudo certo e ofereça suporte pós-venda.",
+                "Mensagem pronta:\n"
+                f"\"Olá! Seu pedido {num} foi entregue. Recebeu tudo conforme esperado? "
+                f"Qualquer dúvida ou ajuste, estou à disposição.\"",
+                "Próximo passo:\n"
+                "Enviar a mensagem e registrar satisfação; se silêncio em 24h, follow-up cordial.",
+            ])
+
+        status_pt = STATUS_LABELS.get(status, status)
+        return "\n\n".join([
+            "Diagnóstico:\n"
+            f"Pedido de ajuda para dar sequência ao rastreamento do pedido {num}.",
+            "Análise:\n"
+            f"Status atual: {status_pt}. Explique o próximo marco (ex.: saída para entrega, confirmação de pagamento).",
+            "Mensagem pronta:\n"
+            f"\"Olá! Seu pedido {num} está {status_pt}. Assim que houver atualização, aviso por aqui.\"",
+            "Próximo passo:\n"
+            "Consultar logística se passar do prazo e retornar ao cliente com data objetiva.",
+        ])
+
+    if re.search(r"metricas|funil|vendas|receita|pipeline", norm_ai):
+        return handle_sales_metrics(ctx, "resumo das metricas de venda")
+
+    suggestion = generate_suggestion(ctx)
+    snippet = last_ai[:200] + ("..." if len(last_ai) > 200 else "")
+    return "\n\n".join([
+        "Diagnóstico:\n"
+        "Você pediu ajuda para dar sequência — vou orientar o próximo passo prático.",
+        f"Análise:\n"
+        f"No contexto anterior: {snippet}",
+        "Mensagem pronta:\n"
+        f"\"{suggestion['suggestion']}\"",
+        f"Próximo passo:\n{suggestion['insight']}",
+    ])
+
+
 def summarize_conversation(ctx: dict) -> str:
     name = _first_name(ctx) or (ctx.get("conversation") or {}).get("customerName", "Cliente")
     intent = detect_intent(ctx)
@@ -267,7 +365,9 @@ def handle_stock_and_quote(ctx: dict, message: str) -> str | None:
 
 
 def handle_order_tracking(ctx: dict, message: str) -> str | None:
-    if not re.search(r"pedido|entrega|rastreio|chega|\d{3,}", _normalize(_combined_text(ctx, message))):
+    if _is_vague_followup(message):
+        return None
+    if not _is_tracking_question(message):
         return None
 
     order = _find_order(ctx, message)
@@ -295,6 +395,11 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
         return summarize_conversation(ctx)
     if re.search(r"sugest|sugira|resposta", norm):
         return suggest_replies(ctx, message)
+
+    vague_reply = handle_vague_followup(ctx, message)
+    if vague_reply:
+        return vague_reply
+
     if re.search(r"transcri|audio", norm):
         intent = detect_intent(ctx)
         return (

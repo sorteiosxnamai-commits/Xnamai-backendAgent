@@ -359,11 +359,11 @@ class AgentContextBuilder:
         messages = ctx.get("messages") or []
         if messages:
             lines.append("")
-            lines.append("### Histórico completo da conversa")
-            for msg in messages[-20:]:
+            lines.append("### Histórico recente do chat (use para follow-ups como \"me ajuda\", \"e agora?\")")
+            for msg in messages[-12:]:
                 sender = msg.get("sender")
-                who = "Cliente" if sender == "customer" else "IA" if sender == "ai" else "Atendente"
-                lines.append(f"{who}: {msg.get('content')}")
+                who = "Atendente" if sender == "customer" else "Copiloto"
+                lines.append(f"{who}: {msg.get('content', '')[:500]}")
 
         lines.extend([
             "",
