@@ -6,6 +6,29 @@ load_dotenv()
 MERCOS_APPLICATION_TOKEN = os.getenv("MERCOS_APPLICATION_TOKEN")
 MERCOS_COMPANY_TOKEN = os.getenv("MERCOS_COMPANY_TOKEN")
 MERCOS_BASE_URL = os.getenv("MERCOS_BASE_URL")
+MERCOS_ENV = os.getenv("MERCOS_ENV", "").strip().lower()
+
+
+def mercos_ambiente() -> str:
+    """sandbox | production | unknown"""
+    if MERCOS_ENV in ("sandbox", "production"):
+        return MERCOS_ENV
+    url = (MERCOS_BASE_URL or "").lower()
+    if "sandbox" in url:
+        return "sandbox"
+    if "api.mercos.com" in url:
+        return "production"
+    return "unknown"
+
+
+def mercos_base_url_host() -> str | None:
+    if not MERCOS_BASE_URL:
+        return None
+    try:
+        from urllib.parse import urlparse
+        return urlparse(MERCOS_BASE_URL).netloc or None
+    except Exception:
+        return MERCOS_BASE_URL
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")

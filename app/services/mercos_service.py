@@ -7,6 +7,8 @@ from app.config.settings import (
     MERCOS_APPLICATION_TOKEN,
     MERCOS_BASE_URL,
     MERCOS_COMPANY_TOKEN,
+    mercos_ambiente,
+    mercos_base_url_host,
 )
 
 MAX_RETRIES = 4
@@ -15,6 +17,17 @@ DEFAULT_RETRY_SECONDS = 6
 
 def mercos_configurado() -> bool:
     return bool(MERCOS_APPLICATION_TOKEN and MERCOS_COMPANY_TOKEN and MERCOS_BASE_URL)
+
+
+def mercos_info() -> dict:
+    ambiente = mercos_ambiente()
+    return {
+        "environment": ambiente,
+        "isProduction": ambiente == "production",
+        "isSandbox": ambiente == "sandbox",
+        "baseUrlHost": mercos_base_url_host(),
+        "configured": mercos_configurado(),
+    }
 
 
 class MercosService:

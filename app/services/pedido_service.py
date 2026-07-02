@@ -1,5 +1,6 @@
 from app.repositories.mercos_sync_repository import MercosSyncRepository
 from app.repositories.pedido_repository import PedidoRepository
+from app.config.settings import mercos_ambiente
 from app.services.mercos_service import MercosService
 
 SITUACAO_LABELS = {
@@ -104,8 +105,9 @@ class PedidoService:
         resumo = self.resumo_situacoes()
         mensagem = f"Pedidos sincronizados: {quantidade}."
         if resumo["allOrdersProcessing"]:
+            alvo = "Mercos" if mercos_ambiente() == "production" else "sandbox Mercos"
             mensagem += (
-                " Todos estão em Processando — altere status no sandbox Mercos "
+                f" Todos estão em Processando — altere status no {alvo} "
                 "(Pedidos → Enviado/Entregue) e sincronize de novo para métricas permanentes."
             )
         elif resumo["retainedRevenue"] > 0:

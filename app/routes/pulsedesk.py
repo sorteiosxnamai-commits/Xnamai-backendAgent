@@ -13,7 +13,7 @@ from app.services.pulsedesk_adapter import (
     mercos_status,
     mercos_logs,
 )
-from app.services.mercos_service import MercosService
+from app.services.mercos_service import MercosService, mercos_info
 from app.services.cliente_service import ClienteService
 from app.services.produto_service import ProdutoService
 from app.services.pedido_service import PedidoService
@@ -53,6 +53,21 @@ def _sincronizar_funil_apos_pedidos() -> str:
 
 class MercosSyncRequest(BaseModel):
     type: str = "all"
+    confirmProduction: bool = False
+
+
+def _exigir_confirmacao_producao(body: MercosSyncRequest) -> None:
+    info = mercos_info()
+    if not info.get("isProduction"):
+        return
+    if body.type == "all" and not body.confirmProduction:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Ambiente de PRODUÇÃO Mercos — confirme explicitamente antes de sincronizar tudo. "
+                "Envie confirmProduction: true no body."
+            ),
+        )
 
 
 @router.get("/dashboard")
@@ -150,24 +165,28 @@ def sincronizar_mercos(
     tipo = body.type
 
     try:
+        _exigir_confirmacao_producao(body)
+        ambiente = mercos_info().get("environment") or "unknown"
+        prefix = f"[{ambiente}] "
+
         if tipo == "customers":
             resultado = cliente_service.sincronizar()
             qtd = resultado.get("clientes_sincronizados", 0)
-            msg = f"Clientes sincronizados: {qtd}"
+            msg = f"{prefix}Clientes sincronizados: {qtd}"
             _registrar_sync("customers", msg, qtd)
             return {"success": True, "message": msg}
 
         if tipo == "products":
             resultado = produto_service.sincronizar()
             qtd = resultado.get("produtos_sincronizados", 0)
-            msg = f"Produtos sincronizados: {qtd}"
+            msg = f"{prefix}Produtos sincronizados: {qtd}"
             _registrar_sync("products", msg, qtd)
             return {"success": True, "message": msg}
 
         if tipo == "orders":
             resultado = pedido_service.sincronizar()
             qtd = resultado.get("pedidos_sincronizados", 0)
-            msg = resultado.get("mensagem") or f"Pedidos sincronizados: {qtd}"
+            msg = resultado.get("mensagem") or f"{prefix}Pedidos sincronizados: {qtd}"
             funil_msg = _sincronizar_funil_apos_pedidos()
             return {
                 "success": True,
@@ -181,7 +200,7 @@ def sincronizar_mercos(
         time.sleep(6)
         o = pedido_service.sincronizar(incremental=False)
         msg = (
-            f"Sincronização concluída — "
+            f"{prefix}Sincronização concluída — "
             f"clientes: {c.get('clientes_sincronizados', 0)}, "
             f"produtos: {p.get('produtos_sincronizados', 0)}, "
             f"pedidos: {o.get('pedidos_sincronizados', 0)}"

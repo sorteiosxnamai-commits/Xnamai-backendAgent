@@ -191,18 +191,23 @@ def dashboard_data() -> dict:
 
 def mercos_status() -> dict:
     from app.repositories.mercos_sync_repository import MercosSyncRepository
-    from app.services.mercos_service import mercos_configurado
+    from app.services.mercos_service import mercos_configurado, mercos_info
     from app.services.pedido_service import PedidoService
 
     repo = DashboardRepository()
     sync_repo = MercosSyncRepository()
     pedido_service = PedidoService()
+    info = mercos_info()
 
     last_sync = sync_repo.ultima_sincronizacao("orders") or sync_repo.ultima_sincronizacao("all")
     resumo = pedido_service.resumo_situacoes()
 
     return {
         "connected": mercos_configurado(),
+        "environment": info["environment"],
+        "isProduction": info["isProduction"],
+        "isSandbox": info["isSandbox"],
+        "baseUrlHost": info["baseUrlHost"],
         "lastSync": last_sync or datetime.utcnow().isoformat(),
         "syncedProducts": repo.contar_produtos() or 0,
         "syncedCustomers": repo.contar_clientes() or 0,
