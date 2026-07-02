@@ -1,6 +1,9 @@
+import logging
 import re
 import unicodedata
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.repositories.dashboard_repository import DashboardRepository
 from app.services.agent_knowledge import full_knowledge_base
@@ -225,7 +228,8 @@ class AgentContextBuilder:
     def _load_sales_metrics(self) -> dict:
         try:
             return vendas_service.metricas()
-        except Exception:
+        except Exception as exc:
+            logger.warning("Falha ao carregar métricas de venda: %s", exc)
             return {}
 
     def _format_sales_metrics(self, metrics: dict) -> str:
@@ -374,6 +378,8 @@ _STOP_WORDS = {
     "para", "como", "qual", "quando", "onde", "sobre", "preciso", "quero", "pode",
     "pedido", "cliente", "conversa", "resuma", "sugira", "status", "liste", "produto",
     "produtos", "catalogo", "mensagem", "resposta", "copiloto", "pulse", "desk",
+    "funil", "vendas", "venda", "metricas", "receita", "retida", "retenc", "pipeline",
+    "faturamento", "conversao", "ticket", "bruto", "relatorio", "relatorios", "esta",
 }
 
 

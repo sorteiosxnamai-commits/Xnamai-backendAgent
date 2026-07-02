@@ -1,9 +1,12 @@
+import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
 
 from app.repositories.conversa_repository import ConversaRepository
 from app.repositories.platform_repository import PlatformRepository
 from app.services.pulsedesk_adapter import listar_pedidos
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_float(value, default: float = 0.0) -> float:
@@ -164,16 +167,45 @@ class VendasService:
         if not etapas:
             return []
 
-        topo_qtd = etapas[0]["quantidade"] or 1
+        topo_qtd = max(int(etapas[0].get("quantidade") or 0), 1)
         prev_qtd = topo_qtd
         for etapa in etapas:
-            etapa["conversaoPct"] = _pct(etapa["quantidade"], topo_qtd)
-            etapa["quedaPct"] = _pct(etapa["quantidade"], prev_qtd)
-            prev_qtd = max(etapa["quantidade"], 1)
+            qtd = int(etapa.get("quantidade") or 0)
+            etapa["conversaoPct"] = _pct(qtd, topo_qtd)
+            etapa["quedaPct"] = _pct(qtd, prev_qtd)
+            prev_qtd = max(qtd, 1)
 
         return etapas
 
+    def _metricas_vazias(self) -> dict:
+        return {
+            "quantidadeVendas": 0,
+            "quantidadeConcluidas": 0,
+            "quantidadeEntregues": 0,
+            "valorTotalVendido": 0.0,
+            "valorConcluido": 0.0,
+            "volumeBruto": 0.0,
+            "valorRetido": 0.0,
+            "valorPipeline": 0.0,
+            "valorCancelado": 0.0,
+            "ticketMedio": 0.0,
+            "taxaConversao": 0.0,
+            "taxaRetencao": 0.0,
+            "pipelineNegocios": 0,
+            "pipelineValor": 0.0,
+            "funil": [],
+            "porStatus": [],
+            "vendasPorDia": [],
+        }
+
     def metricas(self) -> dict:
+        try:
+            return self._calcular_metricas()
+        except Exception as exc:
+            logger.exception("Erro ao calcular métricas de venda: %s", exc)
+            return self._metricas_vazias()
+
+    def _calcular_metricas(self) -> dict:
         pedidos = self._load_pedidos()
         funil_estagios = self._load_funil()
 

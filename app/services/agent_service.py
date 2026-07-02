@@ -5,7 +5,11 @@ import uuid
 
 from app.config.settings import OPENAI_MODEL
 from app.services.agent_context_builder import AgentContextBuilder
-from app.services.agent_intelligent_engine import generate_reply, generate_suggestion
+from app.services.agent_intelligent_engine import (
+    generate_reply,
+    generate_suggestion,
+    handle_sales_metrics,
+)
 from app.services.conversas_service import ConversasService
 from app.services.openai_provider import call_openai, openai_configured
 
@@ -44,6 +48,18 @@ class AgentService:
     ) -> dict:
         return self.context_builder.build(conversation_id, customer_id, history, user_message)
 
+    def _minimal_context(self, message: str) -> dict:
+        return {
+            "userMessage": message,
+            "salesMetrics": self.context_builder._load_sales_metrics(),
+            "platformStats": self.context_builder._platform_stats(),
+            "products": [],
+            "productsCatalog": "",
+            "messages": [],
+            "orders": [],
+            "relatedOrders": [],
+        }
+
     def chat(
         self,
         message: str,
@@ -57,8 +73,23 @@ class AgentService:
 
         try:
             ctx = self.context_builder.build(conversation_id, customer_id, history, message)
-            system_prompt = self.context_builder.to_prompt(ctx)
+        except Exception as exc:
+            logger.exception("Erro ao montar contexto do Copiloto: %s", exc)
+            ctx = self._minimal_context(message)
 
+        try:
+            sales_reply = handle_sales_metrics(ctx, message)
+            if sales_reply:
+                return {
+                    "reply": sales_reply,
+                    "conversationId": conv_id,
+                    "source": "intelligent",
+                }
+        except Exception as exc:
+            logger.warning("Resposta de métricas de venda falhou: %s", exc)
+
+        try:
+            system_prompt = self.context_builder.to_prompt(ctx)
             ai_reply = call_openai(message, system_prompt, history, mode)
             if ai_reply:
                 return {
@@ -66,7 +97,10 @@ class AgentService:
                     "conversationId": conv_id,
                     "source": "openai",
                 }
+        except Exception as exc:
+            logger.warning("OpenAI no Copiloto falhou: %s", exc)
 
+        try:
             reply = generate_reply(message, ctx, mode)
             return {
                 "reply": reply,

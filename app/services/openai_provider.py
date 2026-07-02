@@ -108,7 +108,13 @@ def call_openai(
         )
         response.raise_for_status()
         data = response.json()
-        return (data.get("choices") or [{}])[0].get("message", {}).get("content", "").strip() or None
+        choices = data.get("choices") or []
+        if not choices:
+            logger.warning("OpenAI retornou choices vazio (%s)", mode)
+            return None
+        message = choices[0].get("message") or {}
+        content = message.get("content")
+        return content.strip() if isinstance(content, str) and content.strip() else None
     except Exception as exc:
         logger.warning("OpenAI falhou (%s): %s", mode, exc)
         return None
