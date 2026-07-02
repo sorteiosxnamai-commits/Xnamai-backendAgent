@@ -18,6 +18,7 @@ SENTIMENT = {
     "proposal_followup": "Decisão — analisando proposta",
     "urgent_support": "Urgente — prioridade máxima",
     "closed_positive": "Satisfeito — conversa encerrada",
+    "sales_metrics": "Gestão — consulta métricas de venda",
     "general": "Neutro — aguardando direcionamento",
 }
 
@@ -102,6 +103,11 @@ def suggest_replies(ctx: dict, message: str | None = None) -> str:
             f"3️⃣ \"Disponível agora. Entrega em 3–5 dias úteis. Qual quantidade precisa?\""
         )
 
+    if intent == "sales_metrics":
+        reply = handle_sales_metrics(ctx, message)
+        if reply:
+            return reply
+
     protocol = (ctx.get("conversation") or {}).get("protocol", "PD-URG")
     fallbacks = {
         "urgent_support": (
@@ -138,6 +144,79 @@ def suggest_replies(ctx: dict, message: str | None = None) -> str:
         f"2️⃣ \"Recebi sua mensagem e já estou verificando. Retorno em instantes.\"\n\n"
         f"3️⃣ \"Para agilizar: confirma produto, pedido ou assunto principal?\""
     )
+
+
+def _is_sales_metrics_question(norm: str) -> bool:
+    return bool(re.search(
+        r"vendas?|vendemos|vendido|faturamento|receita|retenc|retido|metricas?|"
+        r"funil|pipeline|ticket|conversao|volume bruto|quanto vend|quantas vend|"
+        r"pedidos confirmados|relatorio de vend",
+        norm,
+    ))
+
+
+def handle_sales_metrics(ctx: dict, message: str | None = None) -> str | None:
+    norm = _normalize(message or ctx.get("userMessage") or "")
+    if not _is_sales_metrics_question(norm):
+        return None
+
+    metrics = ctx.get("salesMetrics") or {}
+    if not metrics:
+        return (
+            "Métricas de venda indisponíveis no momento. "
+            "Verifique os pedidos no Mercos ou abra a página Relatórios."
+        )
+
+    qtd = metrics.get("quantidadeVendas", 0)
+    valor = float(metrics.get("valorTotalVendido") or 0)
+    retido = float(metrics.get("valorRetido") or 0)
+    pipeline = float(metrics.get("valorPipeline") or 0)
+    bruto = float(metrics.get("volumeBruto") or 0)
+    ticket = float(metrics.get("ticketMedio") or 0)
+    concluidas = metrics.get("quantidadeConcluidas", 0)
+    entregues = metrics.get("quantidadeEntregues", 0)
+    taxa_ret = metrics.get("taxaRetencao", 0)
+    taxa_conv = metrics.get("taxaConversao", 0)
+    oportunidades = metrics.get("pipelineNegocios", 0)
+    pipeline_valor = float(metrics.get("pipelineValor") or 0)
+
+    lines = [
+        "Métricas de venda",
+        "",
+        "Resumo comercial",
+        f"Vendas confirmadas: {qtd}",
+        f"Valor vendido: {_format_currency(valor)}",
+        f"Enviadas ou entregues: {concluidas}",
+        f"Entregues: {entregues}",
+        f"Receita retida: {_format_currency(retido)} ({taxa_ret}% do bruto)",
+        f"Pipeline em aberto: {_format_currency(pipeline)}",
+        f"Volume bruto: {_format_currency(bruto)}",
+        f"Ticket médio: {_format_currency(ticket)}",
+        f"Oportunidades no funil: {oportunidades} ({_format_currency(pipeline_valor)})",
+        f"Conversão contato para entrega: {taxa_conv}%",
+    ]
+
+    funil = metrics.get("funil") or []
+    if funil:
+        lines.extend(["", "Funil de vendas"])
+        for step in funil[:6]:
+            val = float(step.get("valor") or 0)
+            valor_txt = _format_currency(val) if val > 0 else "sem valor monetário"
+            lines.append(
+                f"{step.get('label')}: {step.get('quantidade', 0)} unidades, "
+                f"{valor_txt}, {step.get('conversaoPct', 0)}% do topo"
+            )
+
+    lines.extend([
+        "",
+        "Detalhes completos na página Relatórios.",
+        "",
+        "Sugestão de resposta:",
+        f"Temos {qtd} pedidos confirmados totalizando {_format_currency(valor)}. "
+        f"{entregues} já foram entregues, com {_format_currency(retido)} de receita concretizada.",
+    ])
+
+    return "\n".join(lines)
 
 
 def handle_stock_and_quote(ctx: dict, message: str) -> str | None:
@@ -258,6 +337,10 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
             '**Mensagem sugerida:** "Qual forma prefere? Envio link de pagamento ou boleto agora."'
         )
 
+    sales_reply = handle_sales_metrics(ctx, message)
+    if sales_reply:
+        return sales_reply
+
     stock_reply = handle_stock_and_quote(ctx, message)
     if stock_reply:
         return stock_reply
@@ -332,7 +415,7 @@ def _contextual_copilot_reply(ctx: dict, message: str) -> str | None:
         "**Mensagem sugerida (copiar e enviar):**",
         f"\"{suggestion['suggestion']}\"",
         "",
-        "_Comandos: `resuma conversa` · `sugira resposta` · `status pedido` · `catálogo`_",
+        "_Comandos: `resuma conversa` · `sugira resposta` · `status pedido` · `quantas vendas` · `catálogo`_",
     ])
     return "\n".join(lines)
 
@@ -372,6 +455,14 @@ def generate_suggestion(ctx: dict) -> dict:
         "payment": {
             "insight": "Cliente quer saber formas de pagamento.",
             "suggestion": "Aceitamos PIX, boleto e parcelamento em 3x sem juros (pedidos acima de R$ 3.000). Qual prefere?",
+            "priority": "medium",
+        },
+        "sales_metrics": {
+            "insight": "Consulta sobre métricas de venda — use os números de Relatórios.",
+            "suggestion": (
+                f"Temos {(ctx.get('salesMetrics') or {}).get('quantidadeVendas', 0)} vendas confirmadas. "
+                "Posso detalhar funil, receita retida ou pipeline?"
+            ),
             "priority": "medium",
         },
         "general": {

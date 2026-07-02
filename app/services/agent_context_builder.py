@@ -6,6 +6,7 @@ from app.repositories.dashboard_repository import DashboardRepository
 from app.services.agent_knowledge import full_knowledge_base
 from app.services.conversas_service import ConversasService
 from app.services.pulsedesk_adapter import listar_clientes, listar_pedidos, listar_produtos, obter_cliente
+from app.services.vendas_service import vendas_service
 
 
 def _format_currency(value: float) -> str:
@@ -117,6 +118,7 @@ class AgentContextBuilder:
 
         products_catalog = self._format_catalog(products)
         platform_stats = self._platform_stats()
+        sales_metrics = self._load_sales_metrics()
 
         return {
             "conversation": conversation,
@@ -130,6 +132,7 @@ class AgentContextBuilder:
             "orders": orders[:10],
             "relatedOrders": related_orders,
             "platformStats": platform_stats,
+            "salesMetrics": sales_metrics,
             "userMessage": user_message,
         }
 
@@ -219,6 +222,60 @@ class AgentContextBuilder:
         except Exception:
             return {"clientes": 0, "produtos": 0, "pedidos": 0}
 
+    def _load_sales_metrics(self) -> dict:
+        try:
+            return vendas_service.metricas()
+        except Exception:
+            return {}
+
+    def _format_sales_metrics(self, metrics: dict) -> str:
+        if not metrics:
+            return "Métricas de venda indisponíveis — verifique pedidos e sync Mercos."
+
+        lines = [
+            f"- Pedidos confirmados (vendas): {metrics.get('quantidadeVendas', 0)}",
+            f"- Enviados/entregues: {metrics.get('quantidadeConcluidas', 0)} | Entregues: {metrics.get('quantidadeEntregues', 0)}",
+            f"- Valor total vendido: {_format_currency(_safe_float(metrics.get('valorTotalVendido')))}",
+            f"- Valor concluído (enviado+entregue): {_format_currency(_safe_float(metrics.get('valorConcluido')))}",
+            f"- Volume bruto: {_format_currency(_safe_float(metrics.get('volumeBruto')))}",
+            f"- Receita retida (entregues): {_format_currency(_safe_float(metrics.get('valorRetido')))}",
+            f"- Pipeline em aberto: {_format_currency(_safe_float(metrics.get('valorPipeline')))}",
+            f"- Cancelados: {_format_currency(_safe_float(metrics.get('valorCancelado')))}",
+            f"- Ticket médio: {_format_currency(_safe_float(metrics.get('ticketMedio')))}",
+            f"- Taxa conversão (contato→entrega): {metrics.get('taxaConversao', 0)}%",
+            f"- Taxa retenção (retido/bruto): {metrics.get('taxaRetencao', 0)}%",
+            f"- Oportunidades no funil: {metrics.get('pipelineNegocios', 0)} | "
+            f"{_format_currency(_safe_float(metrics.get('pipelineValor')))}",
+        ]
+
+        funil = metrics.get("funil") or []
+        if funil:
+            lines.append("")
+            lines.append("#### Funil de vendas (etapas)")
+            for step in funil:
+                valor = (
+                    _format_currency(_safe_float(step.get("valor")))
+                    if _safe_float(step.get("valor")) > 0
+                    else "—"
+                )
+                lines.append(
+                    f"- {step.get('label')}: {step.get('quantidade', 0)} un. | {valor} | "
+                    f"{step.get('conversaoPct', 0)}% do topo"
+                )
+
+        por_status = metrics.get("porStatus") or []
+        if por_status:
+            lines.append("")
+            lines.append("#### Pedidos por status")
+            for item in por_status:
+                if item.get("quantidade", 0) > 0 or _safe_float(item.get("valor")) > 0:
+                    lines.append(
+                        f"- {item.get('label')}: {item.get('quantidade', 0)} | "
+                        f"{_format_currency(_safe_float(item.get('valor')))}"
+                    )
+
+        return "\n".join(lines)
+
     def to_prompt(self, ctx: dict) -> str:
         intent = detect_intent(ctx)
         lines = [
@@ -235,6 +292,14 @@ class AgentContextBuilder:
             f"- Produtos no catálogo: {stats.get('produtos', 0)}",
             f"- Pedidos registrados: {stats.get('pedidos', 0)}",
         ])
+
+        sales = ctx.get("salesMetrics") or {}
+        if sales:
+            lines.extend([
+                "",
+                "### Métricas de venda (Relatórios — use estes números para perguntas sobre vendas, funil e receita)",
+                self._format_sales_metrics(sales),
+            ])
 
         conv = ctx.get("conversation")
         if conv:
@@ -339,6 +404,13 @@ def detect_intent(ctx: dict, message: str | None = None) -> str:
         return "payment"
     if re.search(r"obrigad|excelente|otimo atendimento", norm):
         return "closed_positive"
+    if re.search(
+        r"vendas?|vendemos|vendido|faturamento|receita|retenc|retido|metricas?|"
+        r"funil|pipeline comercial|ticket medio|conversao|volume bruto|"
+        r"quanto vend|quantas vend|pedidos confirmados|relatorio",
+        norm,
+    ):
+        return "sales_metrics"
     return "general"
 
 
