@@ -47,6 +47,8 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PulseDesk")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+# Com API key: usa GPT sempre (sem fallback por regex). Desative só para dev local.
+COPILOT_GPT_ONLY = os.getenv("COPILOT_GPT_ONLY", "true").lower() == "true"
 
 # WhatsApp Meta Cloud API (Etapa 5)
 META_APP_ID = os.getenv("META_APP_ID", "")
