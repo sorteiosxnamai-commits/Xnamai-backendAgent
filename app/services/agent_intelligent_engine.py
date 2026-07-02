@@ -23,11 +23,11 @@ SENTIMENT = {
 }
 
 STATUS_LABELS = {
-    "delivered": "✅ Entregue",
-    "shipped": "🚚 Em trânsito",
-    "processing": "📦 Em separação",
-    "pending": "⏳ Aguardando pagamento",
-    "cancelled": "❌ Cancelado",
+    "delivered": "Entregue",
+    "shipped": "Em transito",
+    "processing": "Em separacao",
+    "pending": "Aguardando pagamento",
+    "cancelled": "Cancelado",
 }
 
 
@@ -372,20 +372,35 @@ def handle_order_tracking(ctx: dict, message: str) -> str | None:
 
     order = _find_order(ctx, message)
     if not order:
-        return "📍 Nenhum pedido encontrado para este cliente. Peça o número do pedido ou sincronize via Mercos."
+        return (
+            "Diagnostico:\n"
+            "Consulta de pedido sem numero ou cliente identificado.\n\n"
+            "Analise:\n"
+            "Nao encontrei pedido vinculado. Confira sync Mercos ou peca numero do pedido ao cliente.\n\n"
+            "Mensagem pronta:\n"
+            "\"Para localizar seu pedido, pode me informar o numero ou CNPJ da empresa?\"\n\n"
+            "Proximo passo:\n"
+            "Buscar pedido em Pedidos ou sincronizar Mercos."
+        )
 
     num = order.get("number", "—")
     status = order.get("status", "pending")
     customer = ctx.get("customer") or {}
     conv = ctx.get("conversation") or {}
-    return (
-        f"📍 **Rastreamento — {num}**\n\n"
-        f"• Cliente: {customer.get('name') or conv.get('customerName', '—')}\n"
-        f"• Status: {STATUS_LABELS.get(status, status)}\n"
-        f"• Valor: {_format_currency(float(order.get('total') or 0))}\n"
-        f"• Itens: {order.get('items', 1)}\n\n"
-        f"💡 Envie o status proativamente e ofereça prioridade se houver urgência."
-    )
+    client = customer.get("name") or conv.get("customerName") or order.get("customerName") or "—"
+    total = _format_currency(float(order.get("total") or 0))
+    status_pt = STATUS_LABELS.get(status, status)
+    return "\n\n".join([
+        "Diagnostico:\n"
+        f"Consulta de status do pedido {num} ({client}).",
+        "Analise:\n"
+        f"Pedido {num} | Cliente: {client} | Status: {status_pt} | Valor: {total} | "
+        f"Itens: {order.get('items', 1)}",
+        "Mensagem pronta:\n"
+        f"\"Seu pedido {num} ({total}) esta {status_pt}. Qualquer novidade, aviso por aqui.\"",
+        "Proximo passo:\n"
+        "Enviar status ao cliente e escalar logistica se houver atraso ou urgencia.",
+    ])
 
 
 def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
@@ -474,12 +489,20 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
 
     if re.search(r"estoque|produto|catalogo", norm):
         lines = [
-            f"• **{p.get('code')}** — {p.get('name')}: {_format_currency(float(p.get('price') or 0))} ({p.get('stock', 0)} un.)"
-            for p in (ctx.get("products") or [])[:8]
+            f"- {p.get('code')} | {p.get('name')}: {_format_currency(float(p.get('price') or 0))} ({p.get('stock', 0)} un.)"
+            for p in (ctx.get("products") or [])[:12]
         ]
         if lines:
-            return f"📋 **Catálogo:**\n\n" + "\n".join(lines) + "\n\nInforme código ou nome para orçamento."
-        return "📋 Catálogo vazio — sincronize produtos via Mercos."
+            return "\n\n".join([
+                "Diagnostico:\nConsulta ao catalogo de produtos.",
+                "Analise:\n" + "\n".join(lines),
+                "Mensagem pronta:\n\"Informe codigo ou nome do produto e quantidade para montar orcamento.\"",
+                "Proximo passo:\nCalcular total com desconto por volume se aplicavel.",
+            ])
+        return (
+            "Diagnostico:\nCatalogo vazio.\n\n"
+            "Proximo passo:\nSincronizar produtos via Mercos em Configuracoes."
+        )
 
     if mode == "agent" and re.search(r"\b(oi|ola|bom dia|boa tarde|boa noite)\b", norm):
         return (
@@ -502,7 +525,58 @@ def generate_reply(message: str, ctx: dict, mode: str = "copilot") -> str:
             "Escolha uma conversa na Central de Atendimento para respostas com contexto completo."
         )
 
-    return suggest_replies(ctx, message)
+    return generate_universal_fallback(ctx, message)
+
+
+def generate_universal_fallback(ctx: dict, message: str) -> str:
+    suggestion = generate_suggestion(ctx)
+    stats = ctx.get("platformStats") or {}
+    customer = ctx.get("customer")
+    conv = ctx.get("conversation")
+    name = _first_name(ctx) or (conv or {}).get("customerName") if conv else ""
+
+    analise_parts: list[str] = []
+    if customer:
+        analise_parts.append(
+            f"Cliente {customer.get('name')}: {customer.get('ordersCount', 0)} pedidos, "
+            f"lifetime {_format_currency(float(customer.get('totalSpent') or 0))}, "
+            f"{customer.get('city') or 'cidade N/A'}."
+        )
+    elif conv:
+        analise_parts.append(
+            f"Conversa com {conv.get('customerName')} ({conv.get('channel')}). "
+            f"Ultima mensagem: {(conv.get('lastMessage') or '')[:120]}"
+        )
+    else:
+        analise_parts.append(
+            f"Plataforma: {stats.get('clientes', 0)} clientes, {stats.get('produtos', 0)} produtos, "
+            f"{stats.get('pedidos', 0)} pedidos sincronizados."
+        )
+
+    recent = ctx.get("recentOrders") or []
+    if recent:
+        o = recent[0]
+        analise_parts.append(
+            f"Pedido recente: #{o.get('number')} — {o.get('customerName') or 'Cliente'} "
+            f"({o.get('status')}, {_format_currency(float(o.get('total') or 0))})"
+        )
+
+    products = ctx.get("products") or []
+    if products and re.search(r"produto|preco|estoque|catalogo", _normalize(message)):
+        p = products[0]
+        analise_parts.append(
+            f"Produto em contexto: {p.get('name')} ({p.get('code')}) — "
+            f"{_format_currency(float(p.get('price') or 0))}, estoque {p.get('stock', 0)} un."
+        )
+
+    return "\n\n".join([
+        "Diagnostico:\n"
+        f"Analisei sua pergunta: \"{(message or '')[:100]}\".",
+        "Analise:\n" + " ".join(analise_parts),
+        "Mensagem pronta:\n"
+        f"\"{suggestion['suggestion']}\"" + (f" ({name})" if name and name not in suggestion['suggestion'] else ""),
+        f"Proximo passo:\n{suggestion['insight']}",
+    ])
 
 
 def _contextual_copilot_reply(ctx: dict, message: str) -> str | None:

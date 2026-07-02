@@ -45,13 +45,22 @@ class AgentService:
         return self.context_builder.build(conversation_id, customer_id, history, user_message)
 
     def _minimal_context(self, message: str) -> dict:
+        products: list[dict] = []
+        try:
+            from app.services.pulsedesk_adapter import listar_produtos
+            products = listar_produtos(page=1, page_size=40).get("data") or []
+        except Exception:
+            products = []
         return {
             "userMessage": message,
             "salesMetrics": self.context_builder._load_sales_metrics(),
             "platformStats": self.context_builder._platform_stats(),
-            "products": [],
-            "productsCatalog": "",
+            "recentOrders": self.context_builder._load_recent_orders(),
+            "products": products,
+            "productsCatalog": self.context_builder._format_catalog(products),
             "messages": [],
+            "sessionHistory": [],
+            "conversationMessages": [],
             "orders": [],
             "relatedOrders": [],
         }
@@ -97,8 +106,11 @@ class AgentService:
             logger.exception("Erro no Copiloto chat: %s", exc)
             return {
                 "reply": (
-                    "Não consegui processar agora. Verifique se Mercos/Supabase estão sincronizados "
-                    f"e tente de novo. (Erro: {str(exc)[:100]})"
+                    "Diagnostico:\n"
+                    "Encontrei um erro ao processar sua pergunta.\n\n"
+                    "Proximo passo:\n"
+                    "Verifique sync Mercos/Supabase e tente de novo. "
+                    f"Detalhe tecnico: {str(exc)[:80]}"
                 ),
                 "conversationId": conv_id,
                 "source": "intelligent",

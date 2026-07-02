@@ -43,7 +43,8 @@ class AgentContextBuilder:
         user_message: str | None = None,
     ) -> dict:
         conversation = None
-        messages: list[dict] = []
+        conversation_messages: list[dict] = []
+        session_messages: list[dict] = []
         all_conversations: list[dict] = []
 
         try:
@@ -56,14 +57,14 @@ class AgentContextBuilder:
             if conversation:
                 customer_id = customer_id or conversation.get("customerId")
                 try:
-                    messages = self.conversas.listar_mensagens(conversation_id)
+                    conversation_messages = self.conversas.listar_mensagens(conversation_id)
                 except Exception:
-                    messages = []
+                    conversation_messages = []
 
         if history:
             for i, item in enumerate(history):
                 role = item.get("role", "user")
-                messages.append({
+                session_messages.append({
                     "id": f"h-{i}",
                     "conversationId": conversation_id or "",
                     "content": item.get("content", ""),
@@ -72,9 +73,12 @@ class AgentContextBuilder:
                     "status": "read",
                 })
 
+        messages = conversation_messages + session_messages
+
         search_text = " ".join(filter(None, [
             user_message or "",
-            *(m.get("content", "") for m in messages if m.get("sender") == "customer"),
+            *(m.get("content", "") for m in session_messages if m.get("sender") == "customer"),
+            *(m.get("content", "") for m in conversation_messages if m.get("sender") == "customer"),
         ]))
 
         if not customer_id:
@@ -112,16 +116,22 @@ class AgentContextBuilder:
             related_orders = orders[:3]
 
         last_customer_msg = None
-        for msg in reversed(messages):
+        for msg in reversed(conversation_messages):
             if msg.get("sender") == "customer":
                 last_customer_msg = msg.get("content")
                 break
+        if not last_customer_msg:
+            for msg in reversed(session_messages):
+                if msg.get("sender") == "customer":
+                    last_customer_msg = msg.get("content")
+                    break
         if not last_customer_msg and conversation:
             last_customer_msg = conversation.get("lastMessage")
 
         products_catalog = self._format_catalog(products)
         platform_stats = self._platform_stats()
         sales_metrics = self._load_sales_metrics()
+        recent_orders = self._load_recent_orders()
 
         return {
             "conversation": conversation,
@@ -129,11 +139,14 @@ class AgentContextBuilder:
             "customer": customer,
             "customerDetail": customer_detail,
             "messages": messages,
+            "conversationMessages": conversation_messages,
+            "sessionHistory": session_messages,
             "lastCustomerMessage": last_customer_msg,
             "productsCatalog": products_catalog,
             "products": products,
             "orders": orders[:10],
             "relatedOrders": related_orders,
+            "recentOrders": recent_orders,
             "platformStats": platform_stats,
             "salesMetrics": sales_metrics,
             "userMessage": user_message,
@@ -231,6 +244,13 @@ class AgentContextBuilder:
         except Exception as exc:
             logger.warning("Falha ao carregar métricas de venda: %s", exc)
             return {}
+
+    def _load_recent_orders(self, limit: int = 25) -> list[dict]:
+        try:
+            resp = listar_pedidos(page=1, page_size=limit)
+            return resp.get("data") or []
+        except Exception:
+            return []
 
     def _format_sales_metrics(self, metrics: dict) -> str:
         if not metrics:
@@ -356,14 +376,41 @@ class AgentContextBuilder:
                         f"{order.get('items', 1)} itens | cliente: {order.get('customerName') or '—'}"
                     )
 
-        messages = ctx.get("messages") or []
-        if messages:
+        recent_orders = ctx.get("recentOrders") or []
+        if recent_orders:
             lines.append("")
-            lines.append("### Histórico recente do chat (use para follow-ups como \"me ajuda\", \"e agora?\")")
-            for msg in messages[-12:]:
-                sender = msg.get("sender")
-                who = "Atendente" if sender == "customer" else "Copiloto"
+            lines.append("### Pedidos recentes na plataforma")
+            for order in recent_orders[:15]:
+                lines.append(
+                    f"- Nº {order.get('number')} | {order.get('customerName') or 'Cliente'} | "
+                    f"status: {order.get('status')} | {_format_currency(_safe_float(order.get('total')))}"
+                )
+
+        conv_msgs = ctx.get("conversationMessages") or []
+        if conv_msgs:
+            lines.append("")
+            lines.append("### Historico da conversa com o cliente (canal real)")
+            for msg in conv_msgs[-15:]:
+                who = "Cliente" if msg.get("sender") == "customer" else "Atendente/IA"
                 lines.append(f"{who}: {msg.get('content', '')[:500]}")
+
+        session = ctx.get("sessionHistory") or []
+        if session:
+            lines.append("")
+            lines.append("### Historico do chat com o Copiloto (sessao de teste do atendente)")
+            for msg in session[-15:]:
+                who = "Atendente" if msg.get("sender") == "customer" else "Copiloto"
+                lines.append(f"{who}: {msg.get('content', '')[:500]}")
+
+        if not conv_msgs and not session:
+            messages = ctx.get("messages") or []
+            if messages:
+                lines.append("")
+                lines.append("### Historico recente")
+                for msg in messages[-12:]:
+                    sender = msg.get("sender")
+                    who = "Atendente" if sender == "customer" else "Copiloto"
+                    lines.append(f"{who}: {msg.get('content', '')[:500]}")
 
         lines.extend([
             "",
@@ -461,20 +508,38 @@ def _find_order(ctx: dict, text: str) -> dict | None:
     related = ctx.get("relatedOrders") or []
     if related:
         return related[0]
+
     orders = ctx.get("orders") or []
     if orders:
         return orders[0]
-    pedidos_resp = listar_pedidos(page=1, page_size=100)
-    all_orders = pedidos_resp.get("data", [])
-    num_match = re.search(r"#?(\d{3,})", text or "")
+
+    pools: list[dict] = []
+    try:
+        pedidos_resp = listar_pedidos(page=1, page_size=100)
+        pools.extend(pedidos_resp.get("data") or [])
+    except Exception:
+        pass
+    pools.extend(ctx.get("recentOrders") or [])
+
+    seen: set[str] = set()
+    all_orders: list[dict] = []
+    for order in pools:
+        oid = str(order.get("id") or order.get("number") or "")
+        if oid and oid not in seen:
+            seen.add(oid)
+            all_orders.append(order)
+
+    num_match = re.search(r"#?(\d{1,})", text or "")
     if num_match:
         num = num_match.group(1)
         for order in all_orders:
             if num in str(order.get("number", "")):
                 return order
+
     customer_id = (ctx.get("customer") or {}).get("id")
     if customer_id:
         for order in all_orders:
             if str(order.get("customerId")) == str(customer_id):
                 return order
-    return all_orders[0] if all_orders else None
+
+    return None

@@ -1,5 +1,6 @@
 import httpx
 import logging
+import time
 
 from app.config.settings import OPENAI_API_KEY, OPENAI_MODEL
 from app.services.agent_knowledge import SUGGESTION_BEHAVIOR
@@ -7,48 +8,46 @@ from app.services.agent_knowledge import SUGGESTION_BEHAVIOR
 logger = logging.getLogger(__name__)
 
 COPILOT_SYSTEM = """
-Você é o Copiloto IA Elite do PulseDesk — consultor comercial e de suporte sênior da equipe.
-O atendente humano usa sua resposta para resolver a dúvida sem escalar para outra pessoa.
+Voce e o Copiloto IA Elite do PulseDesk — consultor comercial e de suporte senior.
+O atendente humano usa sua resposta para resolver qualquer duvida do cliente sem escalar.
 
-Seu diferencial: interpretar dados reais do contexto, explicar o que significam e sugerir ação concreta.
-Nunca despeje listas cruas de números — traduza em insight de negócio.
+Voce TEM acesso a dados reais abaixo: clientes, produtos, pedidos, conversas, metricas e funil.
+Use-os sempre antes de dizer que falta informacao.
 
-## Formato (sempre, nesta ordem)
-Diagnóstico:
-1–2 frases sobre o que o atendente precisa saber ou fazer agora.
+## Formato (sempre)
+Diagnostico:
+O que o atendente precisa saber ou fazer (1-2 frases).
 
-Análise:
-Resposta objetiva com números EXATOS do contexto (pedidos, valores, estoque, status, funil).
-Para métricas e funil: compare etapas, destaque gargalos, receita retida vs pipeline, conversão.
-Para orçamentos: calcule total, desconto por volume se aplicável, cite código e estoque.
-Para pedidos: status, valor, cliente e previsão prática.
+Analise:
+Resposta completa com numeros EXATOS do contexto. Interprete, nao apenas liste.
+Para follow-ups vagos ("me ajuda", "e agora?"): leia o historico do chat e oriente o PROXIMO passo — nunca repita a resposta anterior.
 
 Mensagem pronta:
-Texto entre aspas, tom humano e profissional, pronto para copiar e enviar ao cliente.
+Texto entre aspas, tom humano, pronto para enviar ao cliente.
 
-Próximo passo:
-Uma ação clara com prazo (ex.: "Enviar proposta em 2h", "Confirmar rastreio agora").
+Proximo passo:
+Acao concreta com prazo.
 
-Alerta: (opcional, só se houver urgência, estoque baixo ou risco)
+Alerta: (opcional — urgencia, estoque baixo, risco)
 
 ## Regras
-- Português do Brasil, direto e natural — sem emojis, sem markdown (* ** •)
-- NUNCA invente dados — use só o contexto; se faltar algo, diga o que pedir ou sincronizar
-- Pedidos Mercos = vendas reais; oportunidades no funil CRM = pipeline comercial (não confundir)
-- Seja proativo: antecipe frete, desconto, alternativa de produto, follow-up
-- Se o usuário pedir ajuda de forma vaga ("me ajuda", "por favor"), use o histórico do chat e NÃO repita a resposta anterior — oriente o próximo passo
+- Portugues do Brasil, natural e profissional — sem emojis, sem markdown
+- NUNCA invente dados — so use o contexto
+- Pedidos Mercos = vendas reais; oportunidades CRM = pipeline (nao confundir)
+- Responda qualquer tema: preco, prazo, pagamento, garantia, troca, reclamacao, metricas, funil, catalogo
+- Se faltar dado especifico, diga exatamente o que pedir ao cliente ou sincronizar no Mercos
 """
 
 AGENT_SYSTEM = """
-Você é o Agente IA do PulseDesk em modo autônomo.
-Responda ao cliente final de forma cordial, resolvendo a dúvida completamente.
-Use dados reais do contexto. Se não souber, peça a informação faltante.
+Voce e o Agente IA do PulseDesk em modo autonomo.
+Responda ao cliente final de forma cordial, resolvendo a duvida completamente.
+Use dados reais do contexto. Se nao souber, peca a informacao faltante.
 """
 
 SUGGESTION_SYSTEM = f"""
-Você gera sugestões para atendentes humanos.
+Voce gera sugestoes para atendentes humanos.
 {SUGGESTION_BEHAVIOR}
-Retorne JSON válido: {{"insight":"...","suggestion":"mensagem pronta para o cliente","priority":"low|medium|high"}}
+Retorne JSON valido: {{"insight":"...","suggestion":"mensagem pronta para o cliente","priority":"low|medium|high"}}
 """
 
 MODE_SYSTEM = {
@@ -61,6 +60,16 @@ MODE_SYSTEM = {
 def openai_configured() -> bool:
     key = OPENAI_API_KEY or ""
     return key.startswith("sk-")
+
+
+def _parse_completion(data: dict, mode: str) -> str | None:
+    choices = data.get("choices") or []
+    if not choices:
+        logger.warning("OpenAI retornou choices vazio (%s)", mode)
+        return None
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    return content.strip() if isinstance(content, str) and content.strip() else None
 
 
 def call_openai(
@@ -77,11 +86,11 @@ def call_openai(
     messages: list[dict] = [
         {
             "role": "system",
-            "content": f"{system_prompt}\n\n---\n\n# CONTEXTO EM TEMPO REAL\n\n{system_context[:80000]}",
+            "content": f"{system_prompt}\n\n---\n\n# CONTEXTO EM TEMPO REAL\n\n{system_context[:90000]}",
         },
     ]
 
-    for item in (history or [])[-16]:
+    for item in (history or [])[-20]:
         role = item.get("role", "user")
         if role not in ("user", "assistant"):
             role = "user"
@@ -93,8 +102,8 @@ def call_openai(
 
     payload: dict = {
         "model": OPENAI_MODEL,
-        "temperature": 0.45,
-        "max_tokens": 2500,
+        "temperature": 0.5,
+        "max_tokens": 3000,
         "messages": messages,
     }
 
@@ -102,25 +111,26 @@ def call_openai(
         payload["response_format"] = {"type": "json_object"}
         payload["temperature"] = 0.25
 
-    try:
-        response = httpx.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=60.0,
-        )
-        response.raise_for_status()
-        data = response.json()
-        choices = data.get("choices") or []
-        if not choices:
-            logger.warning("OpenAI retornou choices vazio (%s)", mode)
-            return None
-        message = choices[0].get("message") or {}
-        content = message.get("content")
-        return content.strip() if isinstance(content, str) and content.strip() else None
-    except Exception as exc:
-        logger.warning("OpenAI falhou (%s): %s", mode, exc)
-        return None
+    last_exc: Exception | None = None
+    for attempt in range(2):
+        try:
+            response = httpx.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=90.0,
+            )
+            response.raise_for_status()
+            return _parse_completion(response.json(), mode)
+        except Exception as exc:
+            last_exc = exc
+            logger.warning("OpenAI falhou (%s) tentativa %s: %s", mode, attempt + 1, exc)
+            if attempt == 0:
+                time.sleep(1.0)
+
+    if last_exc:
+        logger.warning("OpenAI esgotou tentativas (%s): %s", mode, last_exc)
+    return None
