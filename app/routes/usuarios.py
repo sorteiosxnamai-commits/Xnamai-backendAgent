@@ -1,0 +1,58 @@
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+
+from app.core.auth import obter_token_payload, requer_admin, verificar_token
+from app.services.usuario_service import usuario_service
+
+router = APIRouter()
+
+
+class CreateUsuarioRequest(BaseModel):
+    name: str = Field(min_length=2)
+    email: str
+    password: str = Field(min_length=6)
+    role: str = "user"
+    company: str | None = None
+
+
+class UpdateUsuarioRequest(BaseModel):
+    name: str | None = None
+    role: str | None = None
+    active: bool | None = None
+    company: str | None = None
+
+
+@router.get("/usuarios")
+def listar_usuarios(autorizado=Depends(verificar_token)):
+    return usuario_service.listar()
+
+
+@router.post("/usuarios")
+def criar_usuario(
+    body: CreateUsuarioRequest,
+    _admin: dict = Depends(requer_admin),
+):
+    return usuario_service.criar(
+        name=body.name,
+        email=body.email,
+        password=body.password,
+        role=body.role,
+        company=body.company,
+    )
+
+
+@router.patch("/usuarios/{usuario_id}")
+def atualizar_usuario(
+    usuario_id: str,
+    body: UpdateUsuarioRequest,
+    payload: dict = Depends(obter_token_payload),
+):
+    return usuario_service.atualizar(
+        usuario_id,
+        actor_id=payload["sub"],
+        actor_role=payload.get("role") or "user",
+        name=body.name,
+        role=body.role,
+        active=body.active,
+        company=body.company,
+    )

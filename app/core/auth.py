@@ -26,6 +26,12 @@ def verificar_token(
 def obter_usuario_id(
     credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> str:
+    return obter_token_payload(credentials).get("sub", "")
+
+
+def obter_token_payload(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+) -> dict:
     token = credentials.credentials
 
     try:
@@ -33,8 +39,20 @@ def obter_usuario_id(
         user_id = payload.get("sub")
         if not user_id:
             raise HTTPException(status_code=401, detail="Token inválido")
-        return str(user_id)
+        return {
+            "sub": str(user_id),
+            "email": payload.get("email"),
+            "role": payload.get("role") or "user",
+        }
     except HTTPException:
         raise
     except Exception:
         raise HTTPException(status_code=401, detail="Token inválido")
+
+
+def requer_admin(
+    payload: dict = Depends(obter_token_payload),
+) -> dict:
+    if payload.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem executar esta ação")
+    return payload

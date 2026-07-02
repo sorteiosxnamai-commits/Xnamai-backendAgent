@@ -21,6 +21,12 @@ USUARIOS_INICIAIS = [
         "nome": "Vendedor Teste",
         "perfil": "vendedor",
     },
+    {
+        "email": "supervisor@pulsedesk.com",
+        "senha": "super123",
+        "nome": "Supervisor Teste",
+        "perfil": "supervisor",
+    },
 ]
 
 

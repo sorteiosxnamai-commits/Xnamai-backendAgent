@@ -76,3 +76,13 @@ class UsuarioRepository:
         )
 
         return [row["email"] for row in (resposta.data or [])]
+
+    def listar(self) -> list[dict]:
+        resposta = (
+            supabase
+            .table("usuarios")
+            .select("id,email,nome,perfil,ativo,empresa,created_at,updated_at")
+            .order("nome")
+            .execute()
+        )
+        return resposta.data or []
