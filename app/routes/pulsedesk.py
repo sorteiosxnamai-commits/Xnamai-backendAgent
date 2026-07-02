@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
@@ -139,7 +141,9 @@ def sincronizar_mercos(
             return {"success": True, "message": f"Pedidos sincronizados: {qtd}"}
 
         c = cliente_service.sincronizar()
+        time.sleep(6)
         p = produto_service.sincronizar()
+        time.sleep(6)
         o = pedido_service.sincronizar()
         return {
             "success": True,
