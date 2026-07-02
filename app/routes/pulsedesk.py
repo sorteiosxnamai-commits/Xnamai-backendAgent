@@ -11,6 +11,7 @@ from app.services.pulsedesk_adapter import (
     mercos_status,
     mercos_logs,
 )
+from app.services.mercos_service import MercosService
 from app.services.cliente_service import ClienteService
 from app.services.produto_service import ProdutoService
 from app.services.pedido_service import PedidoService
@@ -85,6 +86,33 @@ def get_mercos_status(autorizado=Depends(verificar_token)):
 @router.get("/mercos/logs")
 def get_mercos_logs(autorizado=Depends(verificar_token)):
     return mercos_logs()
+
+
+@router.post("/mercos/testar-conexao")
+def testar_conexao_mercos(autorizado=Depends(verificar_token)):
+    try:
+        clientes = MercosService().listar_clientes()
+        if isinstance(clientes, dict):
+            raise HTTPException(
+                status_code=502,
+                detail=clientes.get("mensagem") or "Resposta inválida do Mercos",
+            )
+        if not isinstance(clientes, list):
+            raise HTTPException(status_code=502, detail="Mercos não retornou lista de clientes")
+        return {
+            "ok": True,
+            "message": f"Mercos respondeu com sucesso ({len(clientes)} clientes na API)",
+            "clientes": len(clientes),
+        }
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        detail = str(exc)
+        if "401" in detail:
+            detail = "Token inválido ou ambiente incorreto (sandbox vs produção). Verifique MERCOS_* no Render."
+        raise HTTPException(status_code=502, detail=f"Falha ao conectar com Mercos: {detail}") from exc
 
 
 @router.post("/mercos/sincronizar")
