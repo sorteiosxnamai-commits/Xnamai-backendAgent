@@ -20,6 +20,8 @@ def _map_conversa(row: dict) -> dict:
         "department": row.get("department"),
         "protocol": row.get("protocol"),
         "assignedTo": row.get("assigned_to"),
+        "canalId": row.get("canal_id"),
+        "contactPhone": row.get("contact_phone"),
     }
 
 
@@ -72,12 +74,23 @@ class ConversasService:
             "content": content.strip(),
             "sender": sender,
             "status": "sent",
+            "direction": "outbound",
         })
 
         self.conversas.atualizar(conversa_id, {
             "last_message": content.strip(),
             "last_message_at": datetime.utcnow().isoformat(),
+            "unread_count": 0,
         })
+
+        if sender in {"agent", "ai"}:
+            from app.services.whatsapp_service import whatsapp_service
+
+            whatsapp_service.enviar_para_conversa(
+                conversa,
+                content.strip(),
+                str(mensagem.get("id")),
+            )
 
         return _map_mensagem(mensagem)
 

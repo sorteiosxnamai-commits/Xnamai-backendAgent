@@ -25,6 +25,15 @@ SMTP_FROM_NAME = os.getenv("SMTP_FROM_NAME", "PulseDesk")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
 
+# WhatsApp Meta Cloud API (Etapa 5)
+META_APP_ID = os.getenv("META_APP_ID", "")
+META_APP_SECRET = os.getenv("META_APP_SECRET", "")
+META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID", "")
+META_WEBHOOK_VERIFY_TOKEN = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "pulsedesk_whatsapp_verify")
+META_API_VERSION = os.getenv("META_API_VERSION", "v21.0")
+PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
+
 
 def cors_origins() -> list[str]:
     origins = [

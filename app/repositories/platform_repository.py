@@ -18,6 +18,18 @@ class PlatformRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
+    def get_canal_by_phone_number_id(self, phone_number_id: str) -> dict | None:
+        resposta = (
+            supabase
+            .table("canais")
+            .select("*")
+            .eq("phone_number_id", phone_number_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
     def create_canal(self, dados: dict) -> dict:
         resposta = supabase.table("canais").insert(dados).execute()
         rows = resposta.data or []

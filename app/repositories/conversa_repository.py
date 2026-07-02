@@ -27,6 +27,19 @@ class ConversaRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
+    def obter_por_thread(self, canal_id: str, external_thread_id: str) -> dict | None:
+        resposta = (
+            supabase
+            .table("conversas")
+            .select("*")
+            .eq("canal_id", canal_id)
+            .eq("external_thread_id", external_thread_id)
+            .limit(1)
+            .execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
     def criar(self, dados: dict) -> dict:
         resposta = supabase.table("conversas").insert(dados).execute()
         rows = resposta.data or []

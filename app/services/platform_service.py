@@ -26,8 +26,14 @@ def _map_canal(row: dict) -> dict:
     }
     if row.get("phone"):
         item["phone"] = row["phone"]
+    if row.get("display_phone"):
+        item["phone"] = row["display_phone"]
     if row.get("last_activity"):
         item["lastActivity"] = _iso(row["last_activity"])
+    if row.get("provider"):
+        item["provider"] = row["provider"]
+    if row.get("provider_status"):
+        item["providerStatus"] = row["provider_status"]
     return item
 
 
@@ -140,11 +146,25 @@ class PlatformService:
 
     def connect_channel(self, channel_type: str, name: str) -> dict:
         self._ensure_tables()
+        connected = False
+        provider_status = "pending"
+        provider = "manual"
+
+        if channel_type == "whatsapp":
+            from app.services.whatsapp_service import whatsapp_service
+
+            status = whatsapp_service.status()
+            connected = bool(status.get("connected"))
+            provider_status = status.get("providerStatus") or ("active" if connected else "pending")
+            provider = "meta"
+
         dados = {
             "id": f"ch-{uuid.uuid4().hex[:8]}",
             "type": channel_type,
             "name": name,
-            "connected": True,
+            "connected": connected,
+            "provider": provider,
+            "provider_status": provider_status,
             "messages_today": 0,
             "last_activity": datetime.utcnow().isoformat(),
         }

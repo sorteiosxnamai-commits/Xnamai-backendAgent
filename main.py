@@ -15,6 +15,8 @@ from app.routes.platform import router as platform_router
 from app.routes.conversas import router as conversas_router
 from app.routes.agent import router as agent_router
 from app.routes.usuarios import router as usuarios_router
+from app.routes.whatsapp import router as whatsapp_router
+from app.routes.webhooks import router as webhooks_router
 
 app = FastAPI(
     title="PulseDesk Backend",
@@ -38,6 +40,7 @@ api.include_router(platform_router, tags=["Platform"])
 api.include_router(conversas_router, tags=["Conversas"])
 api.include_router(agent_router, tags=["Agent"])
 api.include_router(usuarios_router, tags=["Usuarios"])
+api.include_router(whatsapp_router, tags=["WhatsApp"])
 api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])
@@ -45,6 +48,7 @@ api.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api.include_router(sincronizacao_router, prefix="/sincronizacao", tags=["Sincronizacao"])
 
 app.include_router(api)
+app.include_router(webhooks_router, tags=["Webhooks"])
 
 
 @app.get("/")
