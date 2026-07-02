@@ -92,7 +92,7 @@ def handle_vague_followup(ctx: dict, message: str) -> str | None:
 
     if re.search(r"rastreamento|rastreio|entregue|transito|separacao|pedido", norm_ai):
         order = _find_order(ctx, message)
-        status = (order or {}).get("status", "delivered")
+        status = (order or {}).get("status", "processing")
         num = (order or {}).get("number", "—")
         total = _format_currency(float((order or {}).get("total") or 0))
 
@@ -553,6 +553,14 @@ def generate_universal_fallback(ctx: dict, message: str) -> str:
             f"{stats.get('pedidos', 0)} pedidos sincronizados."
         )
 
+    metrics = ctx.get("salesMetrics") or {}
+    if metrics and not customer and not conv:
+        analise_parts.append(
+            f"Vendas: {metrics.get('quantidadeVendas', 0)} pedidos, "
+            f"{_format_currency(float(metrics.get('valorTotalVendido') or 0))} total, "
+            f"receita retida {_format_currency(float(metrics.get('valorRetido') or 0))}."
+        )
+
     recent = ctx.get("recentOrders") or []
     if recent:
         o = recent[0]
@@ -605,6 +613,9 @@ def _contextual_copilot_reply(ctx: dict, message: str) -> str | None:
         lines.append(f"• Última mensagem: _\"{last[:150]}{'…' if len(last) > 150 else ''}\"_")
 
     orders = ctx.get("orders") or []
+    if not orders:
+        detail = ctx.get("customerDetail") or {}
+        orders = detail.get("orders") or []
     if orders:
         o = orders[0]
         lines.append(f"• Pedido recente: **{o.get('number')}** ({o.get('status')}) — {_format_currency(float(o.get('total') or 0))}")

@@ -92,11 +92,9 @@ class AgentContextBuilder:
                 customer = obter_cliente(str(customer_id))
                 if customer:
                     customer_detail = dict(customer)
-                    pedidos_resp = listar_pedidos(page=1, page_size=100)
-                    orders = [
-                        o for o in pedidos_resp.get("data", [])
-                        if str(o.get("customerId")) == str(customer_id)
-                    ]
+                    orders = list(customer.get("orders") or [])
+                    if not orders:
+                        orders = self._load_orders_for_customer(str(customer_id), customer.get("name"))
                     customer["ordersCount"] = len(orders)
                     customer["totalSpent"] = sum(_safe_float(o.get("total")) for o in orders)
                     customer_detail["orders"] = orders[:10]
@@ -151,6 +149,27 @@ class AgentContextBuilder:
             "salesMetrics": sales_metrics,
             "userMessage": user_message,
         }
+
+    def _load_orders_for_customer(self, customer_id: str, customer_name: str | None = None) -> list[dict]:
+        matched: list[dict] = []
+        search_terms = [customer_id]
+        if customer_name:
+            search_terms.append(customer_name.split()[0])
+
+        seen: set[str] = set()
+        for term in search_terms:
+            try:
+                resp = listar_pedidos(page=1, page_size=200, search=term)
+                for order in resp.get("data") or []:
+                    if str(order.get("customerId")) != str(customer_id):
+                        continue
+                    oid = str(order.get("id") or order.get("number") or "")
+                    if oid and oid not in seen:
+                        seen.add(oid)
+                        matched.append(order)
+            except Exception:
+                continue
+        return matched
 
     def _resolve_customer_id(self, text: str, conversations: list[dict]) -> str | None:
         norm = _normalize(text)
@@ -210,12 +229,23 @@ class AgentContextBuilder:
         nums = re.findall(r"#?(\d{3,})", text or "")
         if not nums:
             return customer_orders[:3]
-        pedidos_resp = listar_pedidos(page=1, page_size=200)
-        all_orders = pedidos_resp.get("data") or []
+
+        pools: list[dict] = list(customer_orders)
+        try:
+            pedidos_resp = listar_pedidos(page=1, page_size=200)
+            pools.extend(pedidos_resp.get("data") or [])
+        except Exception:
+            pass
+
         matched = []
+        seen: set[str] = set()
         for num in nums:
-            for order in all_orders:
-                if num in str(order.get("number", "")):
+            for order in pools:
+                if num not in str(order.get("number", "")):
+                    continue
+                oid = str(order.get("id") or order.get("number") or "")
+                if oid and oid not in seen:
+                    seen.add(oid)
                     matched.append(order)
         return matched or customer_orders[:3]
 
@@ -230,13 +260,24 @@ class AgentContextBuilder:
 
     def _platform_stats(self) -> dict:
         try:
-            return {
+            stats = {
                 "clientes": self.dashboard.contar_clientes() or 0,
                 "produtos": self.dashboard.contar_produtos() or 0,
                 "pedidos": self.dashboard.contar_pedidos() or 0,
             }
+            try:
+                from app.repositories.mercos_sync_repository import MercosSyncRepository
+
+                sync_repo = MercosSyncRepository()
+                stats["lastMercosSync"] = (
+                    sync_repo.ultima_sincronizacao("orders")
+                    or sync_repo.ultima_sincronizacao("all")
+                )
+            except Exception:
+                stats["lastMercosSync"] = None
+            return stats
         except Exception:
-            return {"clientes": 0, "produtos": 0, "pedidos": 0}
+            return {"clientes": 0, "produtos": 0, "pedidos": 0, "lastMercosSync": None}
 
     def _load_sales_metrics(self) -> dict:
         try:
@@ -316,6 +357,10 @@ class AgentContextBuilder:
             f"- Produtos no catálogo: {stats.get('produtos', 0)}",
             f"- Pedidos registrados: {stats.get('pedidos', 0)}",
         ])
+        if stats.get("lastMercosSync"):
+            lines.append(f"- Última sync Mercos (pedidos): {stats.get('lastMercosSync')}")
+        elif stats.get("pedidos", 0) == 0:
+            lines.append("- Aviso: nenhum pedido no Supabase — sincronize Mercos em Configurações.")
 
         sales = ctx.get("salesMetrics") or {}
         if sales:
@@ -433,10 +478,8 @@ class AgentContextBuilder:
 
 _STOP_WORDS = {
     "para", "como", "qual", "quando", "onde", "sobre", "preciso", "quero", "pode",
-    "pedido", "cliente", "conversa", "resuma", "sugira", "status", "liste", "produto",
-    "produtos", "catalogo", "mensagem", "resposta", "copiloto", "pulse", "desk",
-    "funil", "vendas", "venda", "metricas", "receita", "retida", "retenc", "pipeline",
-    "faturamento", "conversao", "ticket", "bruto", "relatorio", "relatorios", "esta",
+    "cliente", "conversa", "resuma", "sugira", "liste", "mensagem", "resposta",
+    "copiloto", "pulse", "desk", "relatorio", "relatorios", "esta", "quais",
 }
 
 
@@ -513,9 +556,16 @@ def _find_order(ctx: dict, text: str) -> dict | None:
     if orders:
         return orders[0]
 
+    detail = ctx.get("customerDetail") or {}
+    detail_orders = detail.get("orders") or []
+    if detail_orders:
+        return detail_orders[0]
+
     pools: list[dict] = []
+    pools.extend(detail_orders)
+    pools.extend(orders)
     try:
-        pedidos_resp = listar_pedidos(page=1, page_size=100)
+        pedidos_resp = listar_pedidos(page=1, page_size=200)
         pools.extend(pedidos_resp.get("data") or [])
     except Exception:
         pass

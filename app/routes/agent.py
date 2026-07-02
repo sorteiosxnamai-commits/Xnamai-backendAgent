@@ -31,9 +31,10 @@ def agent_status(autorizado=Depends(verificar_token)):
 def agent_context(
     conversationId: str | None = None,
     customerId: str | None = None,
+    message: str | None = None,
     autorizado=Depends(verificar_token),
 ):
-    ctx = agent_service.build_context(conversationId, customerId)
+    ctx = agent_service.build_context(conversationId, customerId, user_message=message)
     return {
         "conversation": ctx.get("conversation"),
         "customer": ctx.get("customer"),
@@ -41,6 +42,12 @@ def agent_context(
         "messages": ctx.get("messages"),
         "lastCustomerMessage": ctx.get("lastCustomerMessage"),
         "productsCatalog": ctx.get("productsCatalog"),
+        "products": ctx.get("products"),
+        "orders": ctx.get("orders"),
+        "relatedOrders": ctx.get("relatedOrders"),
+        "recentOrders": ctx.get("recentOrders"),
+        "salesMetrics": ctx.get("salesMetrics"),
+        "platformStats": ctx.get("platformStats"),
     }
 
 
