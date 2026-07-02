@@ -80,6 +80,13 @@ def mover_funil(body: MoveDealRequest, autorizado=Depends(verificar_token)):
     return {"success": True}
 
 
+@router.post("/funil/sincronizar")
+def sincronizar_funil(autorizado=Depends(verificar_token)):
+    from app.services.funil_sync_service import funil_sync_service
+
+    return funil_sync_service.sincronizar()
+
+
 @router.get("/campanhas")
 def get_campanhas(autorizado=Depends(verificar_token)):
     return platform_service.get_campaigns()

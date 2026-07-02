@@ -13,22 +13,11 @@ SEED_CHANNELS = [
 ]
 
 SEED_FUNNEL = [
-    {"id": "s1", "name": "Lead", "deals": [
-        {"id": "d1", "title": "Proposta ERP", "contact": "Carlos Mendes", "value": 45000, "channel": "whatsapp", "stageId": "s1"},
-        {"id": "d2", "title": "Consultoria TI", "contact": "Lucas Ferreira", "value": 12000, "channel": "webchat", "stageId": "s1"},
-    ]},
-    {"id": "s2", "name": "Qualificação", "deals": [
-        {"id": "d3", "title": "Licenças SaaS", "contact": "Fernanda Lima", "value": 28000, "channel": "instagram", "stageId": "s2"},
-    ]},
-    {"id": "s3", "name": "Proposta", "deals": [
-        {"id": "d4", "title": "Implantação WABA", "contact": "João Pereira", "value": 18500, "channel": "whatsapp", "stageId": "s3"},
-    ]},
-    {"id": "s4", "name": "Negociação", "deals": [
-        {"id": "d5", "title": "Pacote Enterprise", "contact": "Patricia Souza", "value": 92000, "channel": "email", "stageId": "s4"},
-    ]},
-    {"id": "s5", "name": "Fechado", "deals": [
-        {"id": "d6", "title": "Suporte Anual", "contact": "Mariana Costa", "value": 8400, "channel": "telegram", "stageId": "s5"},
-    ]},
+    {"id": "s1", "name": "Lead", "deals": []},
+    {"id": "s2", "name": "Qualificação", "deals": []},
+    {"id": "s3", "name": "Proposta", "deals": []},
+    {"id": "s4", "name": "Negociação", "deals": []},
+    {"id": "s5", "name": "Fechado", "deals": []},
 ]
 
 SEED_CAMPAIGNS = [
