@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime
 
 from fastapi import HTTPException
@@ -101,9 +102,41 @@ class PlatformService:
         self._ensure_tables()
         try:
             rows = self.repo.list_canais()
+            msg_counts = self._messages_today_by_channel_type()
         except Exception as exc:
             self._handle_db_error(exc)
-        return [_map_canal(row) for row in rows]
+        result = []
+        for row in rows:
+            item = _map_canal(row)
+            item["messagesToday"] = msg_counts.get(row.get("type"), 0)
+            result.append(item)
+        return result
+
+    def _messages_today_by_channel_type(self) -> dict[str, int]:
+        hoje = datetime.utcnow().date()
+        try:
+            conversas = supabase.table("conversas").select("id,channel").execute().data or []
+            mensagens = supabase.table("mensagens").select("conversa_id,created_at").execute().data or []
+        except Exception:
+            return {}
+
+        canal_por_conversa = {str(c["id"]): c.get("channel") or "whatsapp" for c in conversas}
+        counts: dict[str, int] = defaultdict(int)
+
+        for msg in mensagens:
+            dt_raw = msg.get("created_at")
+            if not dt_raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(dt_raw).replace("Z", "+00:00")).replace(tzinfo=None)
+            except ValueError:
+                continue
+            if dt.date() != hoje:
+                continue
+            channel = canal_por_conversa.get(str(msg.get("conversa_id")), "whatsapp")
+            counts[channel] += 1
+
+        return dict(counts)
 
     def connect_channel(self, channel_type: str, name: str) -> dict:
         self._ensure_tables()
