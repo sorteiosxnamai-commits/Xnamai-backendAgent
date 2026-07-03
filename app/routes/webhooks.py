@@ -1,7 +1,8 @@
 import json
 
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 
+from app.config.settings import META_WEBHOOK_VERIFY_TOKEN
 from app.providers.whatsapp_meta import WhatsAppMetaProvider
 from app.services.whatsapp_service import whatsapp_service
 
@@ -14,9 +15,31 @@ def verificar_webhook_whatsapp(
     hub_verify_token: str | None = Query(None, alias="hub.verify_token"),
     hub_challenge: str | None = Query(None, alias="hub.challenge"),
 ):
-    challenge = whatsapp_service.verificar_webhook(hub_mode, hub_verify_token, hub_challenge)
-    return Response(content=challenge, media_type="text/plain")
+    if not hub_mode and not hub_verify_token and not hub_challenge:
+        return {
+            "status": "ok",
+            "message": (
+                "Endpoint do webhook WhatsApp ativo. "
+                "Abrir no navegador não configura a Meta — use o painel Meta Developer."
+            ),
+            "verifyToken": META_WEBHOOK_VERIFY_TOKEN or "pulsedesk_whatsapp_verify",
+            "fields": ["messages"],
+        }
 
+    try:
+        challenge = whatsapp_service.verificar_webhook(hub_mode, hub_verify_token, hub_challenge)
+    except HTTPException as exc:
+        if exc.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Verificação do webhook falhou. "
+                    f"Confira se o Verify Token na Meta é exatamente: {META_WEBHOOK_VERIFY_TOKEN or 'pulsedesk_whatsapp_verify'}"
+                ),
+            ) from exc
+        raise
+
+    return Response(content=challenge, media_type="text/plain")
 
 @router.post("/webhooks/whatsapp")
 async def receber_webhook_whatsapp(request: Request):
