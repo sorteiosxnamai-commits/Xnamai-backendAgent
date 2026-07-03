@@ -158,13 +158,7 @@ class ChatbotService:
         if conversation_id:
             conversa = self.conversas.obter(conversation_id)
 
-        if not conversa:
-            rows = self.conversas.listar()
-            for row in rows:
-                if row.get("channel") == channel and row.get("status") != "closed":
-                    conversa = row
-                    break
-
+        # Teste sempre usa conversa nova, sem atendente humano (reuso quebrava com assigned_to)
         if not conversa:
             conversa = self.conversas.criar({
                 "customer_name": "Cliente Teste Robô",
