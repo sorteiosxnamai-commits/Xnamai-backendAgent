@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends
+from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.auth import obter_usuario_id
+from app.core.auth import obter_usuario_id, security
 from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
+    LogoutRequest,
+    RefreshTokenRequest,
     RegisterRequest,
     ResetPasswordRequest,
     UpdateProfileRequest,
@@ -29,6 +32,25 @@ def register(body: RegisterRequest):
         email=body.email,
         password=body.password,
         company=body.company,
+    )
+
+
+@router.post("/refresh")
+def refresh(body: RefreshTokenRequest):
+    return auth_service.refresh(body.refreshToken)
+
+
+@router.post("/logout")
+def logout(
+    body: LogoutRequest | None = None,
+    usuario_id: str = Depends(obter_usuario_id),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+):
+    refresh_token = body.refreshToken if body else None
+    return auth_service.logout(
+        access_token=credentials.credentials,
+        usuario_id=usuario_id,
+        refresh_token=refresh_token,
     )
 
 

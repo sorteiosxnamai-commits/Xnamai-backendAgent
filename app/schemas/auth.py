@@ -26,3 +26,11 @@ class ResetPasswordRequest(BaseModel):
 class UpdateProfileRequest(BaseModel):
     name: str | None = Field(default=None, min_length=2, max_length=120)
     company: str | None = Field(default=None, max_length=120)
+
+
+class RefreshTokenRequest(BaseModel):
+    refreshToken: str = Field(min_length=20)
+
+
+class LogoutRequest(BaseModel):
+    refreshToken: str | None = None

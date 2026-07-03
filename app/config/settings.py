@@ -37,6 +37,31 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 AUTH_RESET_DEBUG = os.getenv("AUTH_RESET_DEBUG", "true").lower() == "true"
 JWT_SECRET = os.getenv("JWT_SECRET", "xnamai_secret_key_dev_only")
 JWT_ALGORITHM = "HS256"
+JWT_ACCESS_MINUTES = int(os.getenv("JWT_ACCESS_MINUTES", "30"))
+JWT_REFRESH_DAYS = int(os.getenv("JWT_REFRESH_DAYS", "7"))
+
+_JWT_SECRETS_FRACOS = frozenset({
+    "",
+    "xnamai_secret_key_dev_only",
+    "gere-uma-chave-longa-e-aleatoria-aqui",
+    "change-me",
+    "secret",
+})
+
+
+def validar_jwt_secret() -> None:
+    """Falha na subida se produção estiver com JWT_SECRET fraco ou ausente."""
+    em_producao = bool(
+        os.getenv("RENDER")
+        or os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod")
+    )
+    if not em_producao:
+        return
+    segredo = (JWT_SECRET or "").strip()
+    if segredo in _JWT_SECRETS_FRACOS or len(segredo) < 32:
+        raise RuntimeError(
+            "JWT_SECRET inseguro em produção. Defina uma chave aleatória com pelo menos 32 caracteres no Render.",
+        )
 
 SMTP_HOST = os.getenv("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))

@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config.settings import cors_origins
+from app.config.settings import cors_origins, validar_jwt_secret
 from app.routes.cliente import router as cliente_router
 from app.routes.produto import router as produto_router
 from app.routes.login import router as login_router
@@ -18,6 +18,8 @@ from app.routes.usuarios import router as usuarios_router
 from app.routes.whatsapp import router as whatsapp_router
 from app.routes.settings import router as settings_router
 from app.routes.webhooks import router as webhooks_router
+
+validar_jwt_secret()
 
 app = FastAPI(
     title="PulseDesk Backend",

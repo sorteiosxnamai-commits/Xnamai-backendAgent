@@ -221,6 +221,3 @@ def sincronizar_mercos(
         ) from exc
 
 
-@router.post("/auth/logout")
-def logout(autorizado=Depends(verificar_token)):
-    return {"success": True}
