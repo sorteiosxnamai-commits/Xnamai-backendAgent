@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.core.auth import obter_token_payload, requer_admin, verificar_token
+from app.core.permissions import requer_permissao
 from app.services.usuario_service import usuario_service
 
 router = APIRouter()
@@ -30,7 +31,7 @@ def listar_usuarios(autorizado=Depends(verificar_token)):
 @router.post("/usuarios")
 def criar_usuario(
     body: CreateUsuarioRequest,
-    _admin: dict = Depends(requer_admin),
+    _admin: dict = Depends(requer_permissao("manageUsers")),
 ):
     return usuario_service.criar(
         name=body.name,

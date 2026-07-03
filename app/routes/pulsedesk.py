@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.core.auth import verificar_token
+from app.core.permissions import requer_permissao
 from app.services.pulsedesk_adapter import (
     dashboard_data,
     listar_clientes,
@@ -76,7 +77,7 @@ def get_dashboard(autorizado=Depends(verificar_token)):
 
 
 @router.get("/vendas/metricas")
-def get_vendas_metricas(autorizado=Depends(verificar_token)):
+def get_vendas_metricas(_: dict = Depends(requer_permissao("viewReports"))):
     return vendas_service.metricas()
 
 
@@ -160,7 +161,7 @@ def testar_conexao_mercos(autorizado=Depends(verificar_token)):
 @router.post("/mercos/sincronizar")
 def sincronizar_mercos(
     body: MercosSyncRequest,
-    autorizado=Depends(verificar_token),
+    _: dict = Depends(requer_permissao("manageIntegrations")),
 ):
     tipo = body.type
 

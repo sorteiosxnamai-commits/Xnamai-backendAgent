@@ -17,24 +17,28 @@ ROLE_PERMISSIONS: dict[str, dict[str, bool]] = {
         "viewReports": True,
         "manageUsers": True,
         "manageIntegrations": True,
+        "managePlatform": True,
         "exportData": True,
     },
     "supervisor": {
         "viewReports": True,
         "manageUsers": False,
         "manageIntegrations": True,
+        "managePlatform": True,
         "exportData": True,
     },
     "vendedor": {
-        "viewReports": True,
+        "viewReports": False,
         "manageUsers": False,
         "manageIntegrations": False,
+        "managePlatform": False,
         "exportData": False,
     },
     "user": {
         "viewReports": False,
         "manageUsers": False,
         "manageIntegrations": False,
+        "managePlatform": False,
         "exportData": False,
     },
 }
@@ -110,7 +114,8 @@ class SettingsService:
             "labels": {
                 "viewReports": "Visualizar relatórios",
                 "manageUsers": "Gerenciar usuários",
-                "manageIntegrations": "Gerenciar integrações",
+                "manageIntegrations": "Gerenciar integrações e sincronização",
+                "managePlatform": "Gerenciar canais, campanhas e robô",
                 "exportData": "Exportar dados",
             },
         }
