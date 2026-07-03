@@ -17,6 +17,7 @@ from app.routes.agent import router as agent_router
 from app.routes.usuarios import router as usuarios_router
 from app.routes.whatsapp import router as whatsapp_router
 from app.routes.settings import router as settings_router
+from app.routes.system import router as system_router
 from app.routes.webhooks import router as webhooks_router
 
 validar_jwt_secret()
@@ -45,6 +46,7 @@ api.include_router(agent_router, tags=["Agent"])
 api.include_router(usuarios_router, tags=["Usuarios"])
 api.include_router(whatsapp_router, tags=["WhatsApp"])
 api.include_router(settings_router, tags=["Settings"])
+api.include_router(system_router, tags=["System"])
 api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])
