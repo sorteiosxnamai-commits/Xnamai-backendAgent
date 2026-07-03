@@ -19,7 +19,6 @@ def criar_access_token(dados: dict) -> tuple[str, str, datetime]:
         **dados,
         "jti": jti,
         "type": "access",
-        "iat": datetime.utcnow().isoformat(),
         "exp": expira,
     }
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
