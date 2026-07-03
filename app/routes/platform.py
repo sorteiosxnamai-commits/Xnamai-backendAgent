@@ -29,6 +29,7 @@ class CampaignCreate(BaseModel):
     channel: str
     status: str
     recipients: int
+    message: str | None = None
     scheduledAt: str | None = None
 
 
@@ -101,6 +102,11 @@ def get_campanhas(autorizado=Depends(verificar_token)):
 @router.post("/campanhas")
 def create_campanha(body: CampaignCreate, _: dict = Depends(requer_permissao("managePlatform"))):
     return platform_service.add_campaign(body.model_dump())
+
+
+@router.post("/campanhas/{campaign_id}/disparar")
+def disparar_campanha(campaign_id: str, _: dict = Depends(requer_permissao("managePlatform"))):
+    return platform_service.dispatch_campaign(campaign_id)
 
 
 @router.get("/chatbot/fluxos")

@@ -91,6 +91,22 @@ class PlatformRepository:
         rows = resposta.data or []
         return rows[0] if rows else dados
 
+    def get_campanha(self, campanha_id: str) -> dict | None:
+        resposta = supabase.table("campanhas").select("*").eq("id", campanha_id).limit(1).execute()
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
+    def update_campanha(self, campanha_id: str, dados: dict) -> dict | None:
+        resposta = (
+            supabase
+            .table("campanhas")
+            .update(dados)
+            .eq("id", campanha_id)
+            .execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
     # Chatbot
     def list_chatbots(self) -> list[dict]:
         resposta = supabase.table("chatbot_fluxos").select("*").order("name").execute()

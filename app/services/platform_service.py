@@ -46,9 +46,16 @@ def _map_campanha(row: dict) -> dict:
         "recipients": int(row.get("recipients") or 0),
         "sent": int(row.get("sent") or 0),
         "opened": int(row.get("opened") or 0),
+        "failed": int(row.get("failed") or 0),
     }
+    if row.get("message"):
+        item["message"] = row["message"]
     if row.get("scheduled_at"):
         item["scheduledAt"] = _iso(row["scheduled_at"])
+    if row.get("dispatched_at"):
+        item["dispatchedAt"] = _iso(row["dispatched_at"])
+    if row.get("last_error"):
+        item["lastError"] = row["last_error"]
     return item
 
 
@@ -268,7 +275,10 @@ class PlatformService:
             "recipients": int(campaign.get("recipients") or 0),
             "sent": 0,
             "opened": 0,
+            "failed": 0,
         }
+        if campaign.get("message"):
+            dados["message"] = campaign["message"].strip()
         if campaign.get("scheduledAt"):
             dados["scheduled_at"] = campaign["scheduledAt"]
         try:
@@ -276,6 +286,12 @@ class PlatformService:
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_campanha(row)
+
+    def dispatch_campaign(self, campaign_id: str) -> dict:
+        from app.services.campaign_service import campaign_service
+
+        self._ensure_tables()
+        return campaign_service.disparar(campaign_id)
 
     # Chatbot
     def get_chatbots(self) -> list[dict]:
