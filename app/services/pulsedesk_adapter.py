@@ -67,6 +67,8 @@ def _map_pedido(row: dict, clientes_por_id: dict | None = None) -> dict:
     if clientes_por_id and cliente_id is not None:
         cliente = clientes_por_id.get(str(cliente_id), {})
         cliente_nome = cliente.get("nome") or cliente.get("razao_social") or ""
+    if not cliente_nome and raw_status in ("1", "pendente"):
+        cliente_nome = "Orçamento sem cliente"
 
     return {
         "id": str(row.get("mercos_id") or row.get("id") or ""),
