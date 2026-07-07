@@ -19,6 +19,7 @@ from app.routes.whatsapp import router as whatsapp_router
 from app.routes.settings import router as settings_router
 from app.routes.system import router as system_router
 from app.routes.webhooks import router as webhooks_router
+from app.routes.etl import router as etl_router
 
 validar_jwt_secret()
 
@@ -52,6 +53,7 @@ api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])
 api.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api.include_router(sincronizacao_router, prefix="/sincronizacao", tags=["Sincronizacao"])
+api.include_router(etl_router, tags=["ETL"])
 
 app.include_router(api)
 app.include_router(webhooks_router, tags=["Webhooks"])
