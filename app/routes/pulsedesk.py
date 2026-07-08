@@ -140,6 +140,11 @@ def get_mercos_logs(autorizado=Depends(verificar_token)):
     return mercos_logs()
 
 
+@router.get("/mercos/homologacao")
+def get_mercos_homologacao(_: dict = Depends(requer_permissao("manageIntegrations"))):
+    return MercosService().status_homologacao()
+
+
 @router.post("/mercos/testar-conexao")
 def testar_conexao_mercos(autorizado=Depends(verificar_token)):
     try:

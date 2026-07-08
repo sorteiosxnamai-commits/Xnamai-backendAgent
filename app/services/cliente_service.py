@@ -1,5 +1,6 @@
 from app.services.mercos_service import MercosService
 from app.repositories.cliente_repository import ClienteRepository
+from app.repositories.mercos_sync_repository import MercosSyncRepository
 
 
 class ClienteService:
@@ -7,9 +8,14 @@ class ClienteService:
     def __init__(self):
         self.mercos = MercosService()
         self.repository = ClienteRepository()
+        self.sync_logs = MercosSyncRepository()
 
-    def sincronizar(self):
-        clientes = self.mercos.listar_clientes()
+    def sincronizar(self, *, incremental: bool = True):
+        alterado_apos = None
+        if incremental:
+            alterado_apos = self.sync_logs.ultima_sincronizacao("customers")
+
+        clientes = self.mercos.listar_clientes(alterado_apos=alterado_apos)
 
         if isinstance(clientes, dict):
             raise RuntimeError(
@@ -54,6 +60,9 @@ class ClienteService:
 
             self.repository.salvar(dados)
             quantidade += 1
+
+        mensagem = f"Clientes sincronizados: {quantidade}."
+        self.sync_logs.registrar(tipo="customers", mensagem=mensagem, quantidade=quantidade)
 
         return {
             "mensagem": "Sincronização concluída.",

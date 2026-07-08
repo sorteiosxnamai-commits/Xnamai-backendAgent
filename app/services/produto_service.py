@@ -1,5 +1,6 @@
 from app.services.mercos_service import MercosService
 from app.repositories.produto_repository import ProdutoRepository
+from app.repositories.mercos_sync_repository import MercosSyncRepository
 
 
 class ProdutoService:
@@ -7,10 +8,15 @@ class ProdutoService:
     def __init__(self):
         self.mercos = MercosService()
         self.repository = ProdutoRepository()
+        self.sync_logs = MercosSyncRepository()
 
-    def sincronizar(self):
+    def sincronizar(self, *, incremental: bool = True):
 
-        produtos = self.mercos.listar_produtos()
+        alterado_apos = None
+        if incremental:
+            alterado_apos = self.sync_logs.ultima_sincronizacao("products")
+
+        produtos = self.mercos.listar_produtos(alterado_apos=alterado_apos)
 
         if isinstance(produtos, dict):
             return produtos
@@ -41,6 +47,9 @@ class ProdutoService:
             quantidade += 1
 
         removidos = self.repository.remover_obsoletos(mercos_ids_validos)
+
+        mensagem = f"Produtos sincronizados: {quantidade}."
+        self.sync_logs.registrar(tipo="products", mensagem=mensagem, quantidade=quantidade)
 
         return {
             "mensagem": "Sincronização concluída.",
