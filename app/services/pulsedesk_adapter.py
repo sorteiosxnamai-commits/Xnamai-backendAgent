@@ -102,6 +102,7 @@ def listar_clientes(page: int = 1, page_size: int = 10, search: str = "") -> dic
             if termo in (row.get("nome") or "").lower()
             or termo in (row.get("email") or "").lower()
             or termo in (row.get("telefone") or "").lower()
+            or termo in (row.get("celular") or "").lower()
             or termo in (row.get("cidade") or "").lower()
             or termo in (row.get("razao_social") or "").lower()
         ]
