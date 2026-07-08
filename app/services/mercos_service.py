@@ -15,6 +15,16 @@ MAX_RETRIES = 4
 DEFAULT_RETRY_SECONDS = 6
 
 
+def _eh_produto_exemplo(produto: dict) -> bool:
+    nome = str(produto.get("nome") or "").lower()
+    return "[exemplo]" in nome
+
+
+def _filtrar_produtos_reais(produtos: list[dict]) -> list[dict]:
+    """Ignora catálogo demo padrão da Mercos sandbox ([Exemplo] ...)."""
+    return [p for p in produtos if not _eh_produto_exemplo(p)]
+
+
 def mercos_configurado() -> bool:
     return bool(MERCOS_APPLICATION_TOKEN and MERCOS_COMPANY_TOKEN and MERCOS_BASE_URL)
 
@@ -109,7 +119,10 @@ class MercosService:
         params = {}
         if alterado_apos:
             params["alterado_apos"] = alterado_apos
-        return self._get("produtos", params)
+        produtos = self._get("produtos", params)
+        if isinstance(produtos, list):
+            return _filtrar_produtos_reais(produtos)
+        return produtos
 
     def listar_pedidos(self, alterado_apos: str | None = None):
         params = {}

@@ -20,6 +20,24 @@ def _extrair_data_pedido(pedido: dict) -> str | None:
     return None
 
 
+def _extrair_produto_pedido(pedido: dict) -> tuple[str, str]:
+    items = pedido.get("items") or pedido.get("itens") or []
+    if not items:
+        return "", ""
+    item = items[0] if isinstance(items, list) else {}
+    if not isinstance(item, dict):
+        return "", ""
+    nome = (
+        item.get("produto_nome")
+        or item.get("nome")
+        or item.get("descricao")
+        or item.get("produto")
+        or ""
+    )
+    codigo = item.get("codigo") or item.get("produto_codigo") or item.get("sku") or ""
+    return str(nome).strip(), str(codigo).strip()
+
+
 def _contar_itens(pedido: dict) -> int:
     items = pedido.get("items") or pedido.get("itens") or []
     if items:
@@ -44,7 +62,8 @@ class PedidoService:
         self.sync_logs = MercosSyncRepository()
 
     def _mapear_pedido(self, pedido: dict) -> dict:
-        return {
+        produto_nome, produto_codigo = _extrair_produto_pedido(pedido)
+        dados = {
             "mercos_id": pedido.get("id"),
             "numero": str(pedido.get("numero") or pedido.get("id") or ""),
             "cliente_mercos_id": pedido.get("cliente_id"),
@@ -54,6 +73,11 @@ class PedidoService:
             "data_pedido": _extrair_data_pedido(pedido),
             "ultima_alteracao": pedido.get("ultima_alteracao"),
         }
+        if produto_nome:
+            dados["produto_nome"] = produto_nome
+        if produto_codigo:
+            dados["produto_codigo"] = produto_codigo
+        return dados
 
     def resumo_situacoes(self) -> dict:
         rows = self.repository.listar()

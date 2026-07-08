@@ -16,6 +16,7 @@ class ProdutoService:
             return produtos
 
         quantidade = 0
+        mercos_ids_validos: set[int] = set()
 
         for produto in produtos:
 
@@ -34,9 +35,15 @@ class ProdutoService:
 
             self.repository.salvar(dados)
 
+            if produto.get("id") is not None:
+                mercos_ids_validos.add(int(produto["id"]))
+
             quantidade += 1
+
+        removidos = self.repository.remover_obsoletos(mercos_ids_validos)
 
         return {
             "mensagem": "Sincronização concluída.",
-            "produtos_sincronizados": quantidade
+            "produtos_sincronizados": quantidade,
+            "produtos_removidos": removidos,
         }

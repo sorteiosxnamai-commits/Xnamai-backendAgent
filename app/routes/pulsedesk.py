@@ -19,6 +19,7 @@ from app.services.cliente_service import ClienteService
 from app.services.produto_service import ProdutoService
 from app.services.pedido_service import PedidoService
 from app.services.vendas_service import vendas_service
+from app.services.rankings_service import rankings_service
 from app.repositories.mercos_sync_repository import MercosSyncRepository
 
 router = APIRouter()
@@ -79,6 +80,14 @@ def get_dashboard(autorizado=Depends(verificar_token)):
 @router.get("/vendas/metricas")
 def get_vendas_metricas(_: dict = Depends(requer_permissao("viewReports"))):
     return vendas_service.metricas()
+
+
+@router.get("/vendas/rankings")
+def get_vendas_rankings(
+    limit: int = 10,
+    _: dict = Depends(requer_permissao("viewReports")),
+):
+    return rankings_service.rankings(limit=limit)
 
 
 @router.get("/clientes")
