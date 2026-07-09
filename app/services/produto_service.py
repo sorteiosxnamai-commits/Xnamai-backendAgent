@@ -46,13 +46,21 @@ class ProdutoService:
 
             quantidade += 1
 
-        removidos = self.repository.remover_obsoletos(mercos_ids_validos)
+        # NUNCA apagar no sync incremental: o Mercos só devolve o que mudou.
+        # Se apagarmos o resto, o catálogo some (ex.: só sobra Cabo HDMI).
+        removidos = 0
+        if alterado_apos is None and mercos_ids_validos:
+            removidos = self.repository.remover_obsoletos(mercos_ids_validos)
 
-        mensagem = f"Produtos sincronizados: {quantidade}."
+        mensagem = (
+            f"Produtos sincronizados: {quantidade}"
+            + (f", removidos: {removidos}." if removidos else ".")
+        )
         self.sync_logs.registrar(tipo="products", mensagem=mensagem, quantidade=quantidade)
 
         return {
             "mensagem": "Sincronização concluída.",
             "produtos_sincronizados": quantidade,
             "produtos_removidos": removidos,
+            "incremental": bool(alterado_apos),
         }
