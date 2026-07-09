@@ -240,6 +240,36 @@ class MercosService:
         )
         return self._resposta_escrita(response)
 
+    def alterar_pedido(self, mercos_id: int | str, dados: dict):
+        """PUT /v2/pedidos/{id} — altera pedido no Mercos."""
+        response = self._request(
+            "PUT",
+            f"{self._base_url_api_root()}/v2/pedidos/{mercos_id}",
+            json_body=dados,
+            raise_for_status=False,
+        )
+        return self._resposta_escrita(response)
+
+    def criar_titulo(self, dados: dict):
+        """POST /titulos — inclui título no Mercos (ex.: PIX externo)."""
+        response = self._request(
+            "POST",
+            f"{MERCOS_BASE_URL}/titulos",
+            json_body=dados,
+            raise_for_status=False,
+        )
+        return self._resposta_escrita(response)
+
+    def alterar_titulo(self, mercos_id: int | str, dados: dict):
+        """PUT /titulos/{id} — altera título no Mercos."""
+        response = self._request(
+            "PUT",
+            f"{MERCOS_BASE_URL}/titulos/{mercos_id}",
+            json_body=dados,
+            raise_for_status=False,
+        )
+        return self._resposta_escrita(response)
+
     def obter_cliente(self, mercos_id: int | str):
         return self._get(f"clientes/{mercos_id}")
 
@@ -261,6 +291,22 @@ class MercosService:
     def listar_politicas_comerciais(self, alterado_apos: str | None = None):
         return self._listar_paginado("politicas_comerciais", alterado_apos)
 
+    def listar_categorias(self, alterado_apos: str | None = None):
+        return self._listar_paginado("categorias", alterado_apos)
+
+    def listar_segmentos(self, alterado_apos: str | None = None):
+        return self._listar_paginado("segmentos", alterado_apos)
+
+    def listar_tipos_pedido(self, alterado_apos: str | None = None):
+        return self._listar_paginado("pedidos/tipo", alterado_apos)
+
+    def listar_produtos_tabela_preco(self, alterado_apos: str | None = None):
+        return self._listar_paginado("produtos_tabela_preco", alterado_apos)
+
+    def listar_usuarios_mercos(self, alterado_apos: str | None = None):
+        """GET /usuarios — vendedores/usuários do Mercos."""
+        return self._listar_paginado("usuarios", alterado_apos)
+
     def status_homologacao(self) -> dict:
         """Resumo técnico para evidências de homologação Mercos."""
         info = mercos_info()
@@ -272,6 +318,8 @@ class MercosService:
             "syncIncrementalPedidos": True,
             "syncIncrementalClientes": True,
             "syncIncrementalProdutos": True,
+            "alterarPedido": True,
+            "titulosIncluirAlterar": True,
         }
 
         apis_leitura = {
@@ -280,6 +328,11 @@ class MercosService:
             "pedidos": False,
             "tabelas_preco": False,
             "condicoes_pagamento": False,
+            "categorias": False,
+            "segmentos": False,
+            "tipos_pedido": False,
+            "produtos_tabela_preco": False,
+            "usuarios_mercos": False,
             "transportadoras": False,
             "politicas_comerciais": False,
         }
@@ -293,6 +346,11 @@ class MercosService:
                 "pedidos": self.listar_pedidos,
                 "tabelas_preco": self.listar_tabelas_preco,
                 "condicoes_pagamento": self.listar_condicoes_pagamento,
+                "categorias": self.listar_categorias,
+                "segmentos": self.listar_segmentos,
+                "tipos_pedido": self.listar_tipos_pedido,
+                "produtos_tabela_preco": self.listar_produtos_tabela_preco,
+                "usuarios_mercos": self.listar_usuarios_mercos,
                 "transportadoras": self.listar_transportadoras,
                 "politicas_comerciais": self.listar_politicas_comerciais,
             }
@@ -307,13 +365,22 @@ class MercosService:
                 except Exception as exc:
                     erros[nome] = str(exc)
 
+        requeridos_ata = (
+            "clientes",
+            "produtos",
+            "tabelas_preco",
+            "condicoes_pagamento",
+            "categorias",
+            "segmentos",
+            "tipos_pedido",
+            "produtos_tabela_preco",
+            "usuarios_mercos",
+        )
         pronto = (
             checks["tokensConfigurados"]
             and checks["throttling429"]
             and checks["paginacaoAlteradoApos"]
-            and apis_leitura["clientes"]
-            and apis_leitura["produtos"]
-            and apis_leitura["pedidos"]
+            and all(apis_leitura.get(nome) for nome in requeridos_ata)
         )
 
         return {

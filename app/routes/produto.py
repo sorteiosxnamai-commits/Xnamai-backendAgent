@@ -38,3 +38,31 @@ def sincronizar_produtos(
     autorizado=Depends(verificar_token)
 ):
     return produto_service.sincronizar()
+
+
+@router.get("/categorias")
+def listar_categorias(
+    autorizado=Depends(verificar_token),
+):
+    return mercos.listar_categorias()
+
+
+@router.get("/tabelas-preco")
+def listar_tabelas_preco(
+    autorizado=Depends(verificar_token),
+):
+    return mercos.listar_tabelas_preco()
+
+
+@router.get("/produtos-tabela-preco")
+def listar_produtos_tabela_preco(
+    autorizado=Depends(verificar_token),
+):
+    return mercos.listar_produtos_tabela_preco()
+
+
+@router.get("/condicoes-pagamento")
+def listar_condicoes_pagamento(
+    autorizado=Depends(verificar_token),
+):
+    return mercos.listar_condicoes_pagamento()
