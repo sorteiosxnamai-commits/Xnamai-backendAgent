@@ -30,6 +30,22 @@ def clear_table(name: str) -> int:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="PERIGO: apaga pedidos/clientes/produtos no Supabase. NÃO é sync."
+    )
+    parser.add_argument(
+        "--confirm-delete-all",
+        required=True,
+        help='Digite exatamente: EU_QUERO_APAGAR_TODOS_OS_PRODUTOS',
+    )
+    args = parser.parse_args()
+    if args.confirm_delete_all != "EU_QUERO_APAGAR_TODOS_OS_PRODUTOS":
+        raise SystemExit(
+            "Abortado. Confirmação inválida — produtos NÃO foram apagados."
+        )
+
     print("=== Limpeza dados Mercos (Supabase) ===\n")
     print("Antes:")
     for table in TABLES:

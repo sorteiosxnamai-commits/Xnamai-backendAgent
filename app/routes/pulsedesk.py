@@ -192,13 +192,10 @@ def sincronizar_mercos(
             return {"success": True, "message": msg}
 
         if tipo == "products":
-            # Catálogo completo — evita apagar produtos fora do lote incremental
+            # Upsert only — sync NUNCA apaga nem inativa produtos
             resultado = produto_service.sincronizar(incremental=False)
             qtd = resultado.get("produtos_sincronizados", 0)
-            rem = resultado.get("produtos_removidos", 0)
-            msg = f"{prefix}Produtos sincronizados: {qtd}"
-            if rem:
-                msg += f" (removidos obsoletos: {rem})"
+            msg = f"{prefix}Produtos sincronizados: {qtd} (nenhum apagado)"
             _registrar_sync("products", msg, qtd)
             return {"success": True, "message": msg}
 

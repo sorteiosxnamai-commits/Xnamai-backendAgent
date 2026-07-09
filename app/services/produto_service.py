@@ -4,6 +4,11 @@ from app.repositories.mercos_sync_repository import MercosSyncRepository
 
 
 class ProdutoService:
+    """Sync Mercos → Supabase: SOMENTE upsert.
+
+    Nunca apaga, nunca inativa produtos automaticamente.
+    Catálogo no banco só cresce/atualiza — remoção é ação manual explícita.
+    """
 
     def __init__(self):
         self.mercos = MercosService()
@@ -22,10 +27,8 @@ class ProdutoService:
             return produtos
 
         quantidade = 0
-        mercos_ids_validos: set[int] = set()
 
         for produto in produtos:
-
             dados = {
                 "mercos_id": produto.get("id"),
                 "nome": produto.get("nome"),
@@ -36,31 +39,22 @@ class ProdutoService:
                 "preco_minimo": produto.get("preco_minimo"),
                 "saldo_estoque": produto.get("saldo_estoque"),
                 "ativo": produto.get("ativo"),
-                "ultima_alteracao": produto.get("ultima_alteracao")
+                "ultima_alteracao": produto.get("ultima_alteracao"),
             }
-
             self.repository.salvar(dados)
-
-            if produto.get("id") is not None:
-                mercos_ids_validos.add(int(produto["id"]))
-
             quantidade += 1
 
-        # NUNCA apagar no sync incremental: o Mercos só devolve o que mudou.
-        # Se apagarmos o resto, o catálogo some (ex.: só sobra Cabo HDMI).
-        removidos = 0
-        if alterado_apos is None and mercos_ids_validos:
-            removidos = self.repository.remover_obsoletos(mercos_ids_validos)
-
         mensagem = (
-            f"Produtos sincronizados: {quantidade}"
-            + (f", removidos: {removidos}." if removidos else ".")
+            f"Produtos sincronizados: {quantidade} "
+            f"({'incremental' if alterado_apos else 'completo'}; nenhum apagado)."
         )
-        self.sync_logs.registrar(tipo="products", mensagem=mensagem, quantidade=quantidade)
+        self.sync_logs.registrar(
+            tipo="products", mensagem=mensagem, quantidade=quantidade
+        )
 
         return {
-            "mensagem": "Sincronização concluída.",
+            "mensagem": "Sincronização concluída. Nenhum produto foi apagado.",
             "produtos_sincronizados": quantidade,
-            "produtos_removidos": removidos,
+            "produtos_removidos": 0,
             "incremental": bool(alterado_apos),
         }
