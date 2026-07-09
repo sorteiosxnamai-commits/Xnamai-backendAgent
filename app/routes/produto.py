@@ -17,6 +17,22 @@ def listar_produtos(
     return mercos.listar_produtos()
 
 
+@router.get("/produtos/{produto_id}")
+def obter_produto(
+    produto_id: int,
+    autorizado=Depends(verificar_token),
+):
+    return mercos.obter_produto(produto_id)
+
+
+@router.post("/produtos")
+def criar_produto(
+    dados: dict,
+    autorizado=Depends(verificar_token),
+):
+    return mercos.criar_produto(dados)
+
+
 @router.post("/produtos/sincronizar")
 def sincronizar_produtos(
     autorizado=Depends(verificar_token)

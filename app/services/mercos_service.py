@@ -192,6 +192,25 @@ class MercosService:
             return _filtrar_produtos_reais(produtos)
         return produtos
 
+    def criar_produto(self, dados: dict):
+        """POST /produtos — inclui produto simples no Mercos."""
+        self._validar_config()
+        response = requests.post(
+            f"{MERCOS_BASE_URL}/produtos",
+            headers={
+                **self.headers,
+                "Content-Type": "application/json",
+            },
+            json=dados,
+            timeout=60,
+        )
+
+        return {
+            "status_code": response.status_code,
+            "resposta": response.text,
+            "meuspedidosid": response.headers.get("meuspedidosid"),
+        }
+
     def listar_pedidos(self, alterado_apos: str | None = None):
         return self._listar_paginado("pedidos", alterado_apos)
 
