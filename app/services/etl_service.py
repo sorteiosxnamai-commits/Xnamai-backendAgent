@@ -44,7 +44,7 @@ class EtlService:
 
         clientes = self.clientes.sincronizar()
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
-        produtos = self.produtos.sincronizar()
+        produtos = self.produtos.sincronizar(incremental=False)
 
         qtd_c = clientes.get("clientes_sincronizados", 0)
         qtd_p = produtos.get("produtos_sincronizados", 0)
@@ -69,7 +69,7 @@ class EtlService:
 
         clientes = self.clientes.sincronizar()
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
-        produtos = self.produtos.sincronizar()
+        produtos = self.produtos.sincronizar(incremental=False)
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
         pedidos = self.pedidos.sincronizar(incremental=True)
 
