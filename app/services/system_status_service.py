@@ -105,11 +105,19 @@ class SystemStatusService:
                 "settingsTab": "mercos",
             },
             {
+                "id": "mercos_products",
+                "title": "Sincronizar produtos",
+                "description": "Catálogo no PulseDesk e no agente (Supabase)",
+                "done": int(mercos.get("syncedProducts") or 0) > 0,
+                "settingsTab": "mercos",
+            },
+            {
                 "id": "whatsapp",
-                "title": "Conectar WhatsApp (Meta)",
-                "description": "META_ACCESS_TOKEN e META_PHONE_NUMBER_ID",
+                "title": "WhatsApp Meta (opcional)",
+                "description": "Demo de vendas usa Z-API no agent-ia-xnamai; Meta é só se for API oficial",
                 "done": whatsapp_ready,
                 "settingsTab": "whatsapp",
+                "optional": True,
             },
             {
                 "id": "openai",
@@ -126,9 +134,10 @@ class SystemStatusService:
                 "settingsTab": "mercos",
             },
         ]
-
-        done_count = sum(1 for item in checklist if item["done"])
-        total = len(checklist)
+        # Prontidão: ignora itens opcionais (Meta WA / nota do agente Z-API)
+        checklist_obrigatorio = [item for item in checklist if not item.get("optional")]
+        done_count = sum(1 for item in checklist_obrigatorio if item["done"])
+        total = len(checklist_obrigatorio)
 
         return {
             "supabase": supabase_status,
