@@ -68,23 +68,36 @@ class MercosService:
             pass
         return float(DEFAULT_RETRY_SECONDS)
 
-    def _request_get(self, path: str, params: dict | None = None) -> requests.Response:
-        """GET com retry em 429 (critério obrigatório de homologação Mercos)."""
+    def _request(
+        self,
+        method: str,
+        url: str,
+        *,
+        params: dict | None = None,
+        json_body: dict | None = None,
+        raise_for_status: bool = True,
+    ) -> requests.Response:
+        """GET/POST/PUT com retry em 429 (critério obrigatório de homologação Mercos)."""
         self._validar_config()
-        url = f"{MERCOS_BASE_URL}/{path.lstrip('/')}"
         last_response: requests.Response | None = None
+        headers = dict(self.headers)
+        if json_body is not None:
+            headers["Content-Type"] = "application/json"
 
         for attempt in range(MAX_RETRIES):
-            response = requests.get(
-                url,
-                headers=self.headers,
+            response = requests.request(
+                method=method.upper(),
+                url=url,
+                headers=headers,
                 params=params or {},
+                json=json_body,
                 timeout=60,
             )
             last_response = response
 
             if response.status_code != 429:
-                response.raise_for_status()
+                if raise_for_status:
+                    response.raise_for_status()
                 return response
 
             if attempt == MAX_RETRIES - 1:
@@ -93,11 +106,31 @@ class MercosService:
             time.sleep(self._retry_seconds(response))
 
         if last_response is not None:
-            last_response.raise_for_status()
+            if raise_for_status:
+                last_response.raise_for_status()
+            return last_response
         raise RuntimeError("Mercos não respondeu após tentativas de rate limit")
+
+    def _request_get(self, path: str, params: dict | None = None) -> requests.Response:
+        url = f"{MERCOS_BASE_URL}/{path.lstrip('/')}"
+        return self._request("GET", url, params=params, raise_for_status=True)
 
     def _get(self, path: str, params: dict | None = None):
         return self._request_get(path, params).json()
+
+    @staticmethod
+    def _resposta_escrita(response: requests.Response) -> dict:
+        body: dict | list | str
+        try:
+            body = response.json()
+        except (json.JSONDecodeError, ValueError):
+            body = response.text
+        return {
+            "status_code": response.status_code,
+            "resposta": body,
+            "meuspedidosid": response.headers.get("meuspedidosid")
+            or response.headers.get("MeusPedidosID"),
+        }
 
     @staticmethod
     def _limitou_registros(response: requests.Response) -> bool:
@@ -150,41 +183,23 @@ class MercosService:
         return self._listar_paginado("clientes", alterado_apos)
 
     def criar_cliente(self, dados):
-        self._validar_config()
-        response = requests.post(
+        response = self._request(
+            "POST",
             f"{MERCOS_BASE_URL}/clientes",
-            headers={
-                **self.headers,
-                "Content-Type": "application/json",
-            },
-            json=dados,
-            timeout=60,
+            json_body=dados,
+            raise_for_status=False,
         )
-
-        return {
-            "status_code": response.status_code,
-            "resposta": response.text,
-            "meuspedidosid": response.headers.get("meuspedidosid"),
-        }
+        return self._resposta_escrita(response)
 
     def alterar_cliente(self, mercos_id: int | str, dados: dict):
         """PUT /clientes/{id} — altera cliente no Mercos."""
-        self._validar_config()
-        response = requests.put(
+        response = self._request(
+            "PUT",
             f"{MERCOS_BASE_URL}/clientes/{mercos_id}",
-            headers={
-                **self.headers,
-                "Content-Type": "application/json",
-            },
-            json=dados,
-            timeout=60,
+            json_body=dados,
+            raise_for_status=False,
         )
-
-        return {
-            "status_code": response.status_code,
-            "resposta": response.text,
-            "meuspedidosid": response.headers.get("meuspedidosid"),
-        }
+        return self._resposta_escrita(response)
 
     def listar_produtos(self, alterado_apos: str | None = None):
         produtos = self._listar_paginado("produtos", alterado_apos)
@@ -194,22 +209,13 @@ class MercosService:
 
     def criar_produto(self, dados: dict):
         """POST /produtos — inclui produto simples no Mercos."""
-        self._validar_config()
-        response = requests.post(
+        response = self._request(
+            "POST",
             f"{MERCOS_BASE_URL}/produtos",
-            headers={
-                **self.headers,
-                "Content-Type": "application/json",
-            },
-            json=dados,
-            timeout=60,
+            json_body=dados,
+            raise_for_status=False,
         )
-
-        return {
-            "status_code": response.status_code,
-            "resposta": response.text,
-            "meuspedidosid": response.headers.get("meuspedidosid"),
-        }
+        return self._resposta_escrita(response)
 
     def listar_pedidos(self, alterado_apos: str | None = None):
         return self._listar_paginado("pedidos", alterado_apos)
@@ -226,47 +232,13 @@ class MercosService:
 
     def criar_pedido(self, dados: dict):
         """POST /v2/pedidos — inclui pedido simples (itens com quantidade, sem grade)."""
-        self._validar_config()
-        url = f"{self._base_url_api_root()}/v2/pedidos"
-        last_response: requests.Response | None = None
-
-        for attempt in range(MAX_RETRIES):
-            response = requests.post(
-                url,
-                headers={
-                    **self.headers,
-                    "Content-Type": "application/json",
-                },
-                json=dados,
-                timeout=60,
-            )
-            last_response = response
-
-            if response.status_code != 429:
-                body: dict | list | str
-                try:
-                    body = response.json()
-                except (json.JSONDecodeError, ValueError):
-                    body = response.text
-
-                return {
-                    "status_code": response.status_code,
-                    "resposta": body,
-                    "meuspedidosid": response.headers.get("meuspedidosid")
-                    or response.headers.get("MeusPedidosID"),
-                }
-
-            if attempt == MAX_RETRIES - 1:
-                break
-            time.sleep(self._retry_seconds(response))
-
-        if last_response is not None:
-            return {
-                "status_code": last_response.status_code,
-                "resposta": last_response.text,
-                "meuspedidosid": None,
-            }
-        raise RuntimeError("Mercos não respondeu após tentativas de rate limit")
+        response = self._request(
+            "POST",
+            f"{self._base_url_api_root()}/v2/pedidos",
+            json_body=dados,
+            raise_for_status=False,
+        )
+        return self._resposta_escrita(response)
 
     def obter_cliente(self, mercos_id: int | str):
         return self._get(f"clientes/{mercos_id}")
