@@ -164,6 +164,26 @@ class MercosService:
         return {
             "status_code": response.status_code,
             "resposta": response.text,
+            "meuspedidosid": response.headers.get("meuspedidosid"),
+        }
+
+    def alterar_cliente(self, mercos_id: int | str, dados: dict):
+        """PUT /clientes/{id} — altera cliente no Mercos."""
+        self._validar_config()
+        response = requests.put(
+            f"{MERCOS_BASE_URL}/clientes/{mercos_id}",
+            headers={
+                **self.headers,
+                "Content-Type": "application/json",
+            },
+            json=dados,
+            timeout=60,
+        )
+
+        return {
+            "status_code": response.status_code,
+            "resposta": response.text,
+            "meuspedidosid": response.headers.get("meuspedidosid"),
         }
 
     def listar_produtos(self, alterado_apos: str | None = None):

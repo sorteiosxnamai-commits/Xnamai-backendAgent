@@ -17,12 +17,29 @@ def listar_clientes(
     return mercos.listar_clientes()
 
 
+@router.get("/clientes/{cliente_id}")
+def obter_cliente(
+    cliente_id: int,
+    autorizado=Depends(verificar_token),
+):
+    return mercos.obter_cliente(cliente_id)
+
+
 @router.post("/clientes")
 def criar_cliente(
     dados: dict,
     autorizado=Depends(verificar_token)
 ):
     return mercos.criar_cliente(dados)
+
+
+@router.put("/clientes/{cliente_id}")
+def alterar_cliente(
+    cliente_id: int,
+    dados: dict,
+    autorizado=Depends(verificar_token),
+):
+    return mercos.alterar_cliente(cliente_id, dados)
 
 
 @router.get("/pedidos")
