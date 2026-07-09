@@ -214,6 +214,60 @@ class MercosService:
     def listar_pedidos(self, alterado_apos: str | None = None):
         return self._listar_paginado("pedidos", alterado_apos)
 
+    def _base_url_api_root(self) -> str:
+        """Converte .../api/v1 em .../api para chamar v2."""
+        self._validar_config()
+        base = (MERCOS_BASE_URL or "").rstrip("/")
+        if base.endswith("/v1"):
+            return base[:-3]
+        if base.endswith("/api"):
+            return base
+        return base
+
+    def criar_pedido(self, dados: dict):
+        """POST /v2/pedidos — inclui pedido simples (itens com quantidade, sem grade)."""
+        self._validar_config()
+        url = f"{self._base_url_api_root()}/v2/pedidos"
+        last_response: requests.Response | None = None
+
+        for attempt in range(MAX_RETRIES):
+            response = requests.post(
+                url,
+                headers={
+                    **self.headers,
+                    "Content-Type": "application/json",
+                },
+                json=dados,
+                timeout=60,
+            )
+            last_response = response
+
+            if response.status_code != 429:
+                body: dict | list | str
+                try:
+                    body = response.json()
+                except (json.JSONDecodeError, ValueError):
+                    body = response.text
+
+                return {
+                    "status_code": response.status_code,
+                    "resposta": body,
+                    "meuspedidosid": response.headers.get("meuspedidosid")
+                    or response.headers.get("MeusPedidosID"),
+                }
+
+            if attempt == MAX_RETRIES - 1:
+                break
+            time.sleep(self._retry_seconds(response))
+
+        if last_response is not None:
+            return {
+                "status_code": last_response.status_code,
+                "resposta": last_response.text,
+                "meuspedidosid": None,
+            }
+        raise RuntimeError("Mercos não respondeu após tentativas de rate limit")
+
     def obter_cliente(self, mercos_id: int | str):
         return self._get(f"clientes/{mercos_id}")
 

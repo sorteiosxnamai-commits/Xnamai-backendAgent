@@ -49,6 +49,15 @@ def listar_pedidos(
     return mercos.listar_pedidos()
 
 
+@router.post("/pedidos")
+def criar_pedido(
+    dados: dict,
+    autorizado=Depends(verificar_token),
+):
+    """Cria pedido simples no Mercos (API v2)."""
+    return mercos.criar_pedido(dados)
+
+
 @router.post("/clientes/sincronizar")
 def sincronizar_clientes(
     autorizado=Depends(verificar_token)
