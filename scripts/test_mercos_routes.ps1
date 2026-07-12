@@ -1,10 +1,20 @@
-# Testa rotas Mercos do PulseDesk (sandbox via backend Render)
-# Uso: .\scripts\test_mercos_routes.ps1
+# Testa rotas Mercos do PulseDesk (sandbox via backend)
+# Uso:
+#   $env:MERCOS_TEST_EMAIL="admin@..."
+#   $env:MERCOS_TEST_PASSWORD="..."
+#   $env:MERCOS_TEST_BASE_URL="https://seu-backend.onrender.com/api"  # opcional
+#   .\scripts\test_mercos_routes.ps1
 
 $ErrorActionPreference = "Stop"
-$BaseUrl = "https://xnamai-backendagent.onrender.com/api"
-$Email = "admin@pulsedesk.com"
-$Password = "admin123"
+
+$BaseUrl = if ($env:MERCOS_TEST_BASE_URL) { $env:MERCOS_TEST_BASE_URL } else { "https://xnamai-backendagent.onrender.com/api" }
+$Email = $env:MERCOS_TEST_EMAIL
+$Password = $env:MERCOS_TEST_PASSWORD
+
+if (-not $Email -or -not $Password) {
+  Write-Host "Defina MERCOS_TEST_EMAIL e MERCOS_TEST_PASSWORD no ambiente." -ForegroundColor Red
+  exit 1
+}
 
 Write-Host ""
 Write-Host "=== 1) Login PulseDesk ===" -ForegroundColor Cyan
@@ -61,6 +71,8 @@ Test-Get "tabelas-preco" "/mercos/tabelas-preco"
 Test-Get "produtos-tabela-preco" "/mercos/produtos-tabela-preco"
 Test-Get "condicoes-pagamento" "/mercos/condicoes-pagamento"
 Test-Get "usuarios-mercos" "/mercos/usuarios-mercos"
+Test-Get "transportadoras" "/mercos/transportadoras"
+Test-Get "politicas-comerciais" "/mercos/politicas-comerciais"
 Test-Get "homologacao" "/mercos/homologacao"
 
 Write-Host ""

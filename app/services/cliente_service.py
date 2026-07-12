@@ -61,10 +61,18 @@ class ClienteService:
             self.repository.salvar(dados)
             quantidade += 1
 
+        cursor = MercosService.max_ultima_alteracao(clientes)
         mensagem = f"Clientes sincronizados: {quantidade}."
-        self.sync_logs.registrar(tipo="customers", mensagem=mensagem, quantidade=quantidade)
+        self.sync_logs.registrar(
+            tipo="customers",
+            mensagem=mensagem,
+            quantidade=quantidade,
+            cursor_ultima_alteracao=cursor,
+        )
 
         return {
             "mensagem": "Sincronização concluída.",
-            "clientes_sincronizados": quantidade
+            "clientes_sincronizados": quantidade,
+            "cursor_ultima_alteracao": cursor,
+            "incremental": bool(alterado_apos),
         }

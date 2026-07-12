@@ -4,13 +4,12 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import cors_origins, validar_jwt_secret
-from app.routes.cliente import router as cliente_router
-from app.routes.produto import router as produto_router
 from app.routes.login import router as login_router
 from app.routes.database import router as database_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.sincronizacao import router as sincronizacao_router
 from app.routes.pulsedesk import router as pulsedesk_router
+from app.routes.mercos import router as mercos_router
 from app.routes.platform import router as platform_router
 from app.routes.conversas import router as conversas_router
 from app.routes.agent import router as agent_router
@@ -48,8 +47,7 @@ api.include_router(usuarios_router, tags=["Usuarios"])
 api.include_router(whatsapp_router, tags=["WhatsApp"])
 api.include_router(settings_router, tags=["Settings"])
 api.include_router(system_router, tags=["System"])
-api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
-api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
+api.include_router(mercos_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])
 api.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api.include_router(sincronizacao_router, prefix="/sincronizacao", tags=["Sincronizacao"])

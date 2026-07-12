@@ -44,12 +44,16 @@ class ProdutoService:
             self.repository.salvar(dados)
             quantidade += 1
 
+        cursor = MercosService.max_ultima_alteracao(produtos if isinstance(produtos, list) else [])
         mensagem = (
             f"Produtos sincronizados: {quantidade} "
             f"({'incremental' if alterado_apos else 'completo'}; nenhum apagado)."
         )
         self.sync_logs.registrar(
-            tipo="products", mensagem=mensagem, quantidade=quantidade
+            tipo="products",
+            mensagem=mensagem,
+            quantidade=quantidade,
+            cursor_ultima_alteracao=cursor,
         )
 
         return {
@@ -57,4 +61,5 @@ class ProdutoService:
             "produtos_sincronizados": quantidade,
             "produtos_removidos": 0,
             "incremental": bool(alterado_apos),
+            "cursor_ultima_alteracao": cursor,
         }
