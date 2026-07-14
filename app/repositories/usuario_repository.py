@@ -67,6 +67,15 @@ class UsuarioRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
+    def excluir(self, usuario_id: str) -> None:
+        (
+            supabase
+            .table("usuarios")
+            .delete()
+            .eq("id", usuario_id)
+            .execute()
+        )
+
     def listar_emails(self) -> list[str]:
         resposta = (
             supabase
@@ -82,6 +91,19 @@ class UsuarioRepository:
             supabase
             .table("usuarios")
             .select("id,email,nome,perfil,ativo,empresa,created_at,updated_at")
+            .order("nome")
+            .execute()
+        )
+        return resposta.data or []
+
+    def listar_por_ids(self, usuario_ids: list[str]) -> list[dict]:
+        if not usuario_ids:
+            return []
+        resposta = (
+            supabase
+            .table("usuarios")
+            .select("id,email,nome,perfil,ativo,empresa,created_at,updated_at")
+            .in_("id", usuario_ids)
             .order("nome")
             .execute()
         )

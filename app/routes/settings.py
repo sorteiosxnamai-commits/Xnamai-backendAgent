@@ -1,17 +1,12 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.core.auth import obter_token_payload, requer_admin, verificar_token
+from app.core.auth import obter_token_payload, obter_usuario_atual
+from app.schemas.workspace import WorkspaceSettingsUpdate
 from app.services.settings_service import settings_service
+from app.services.workspace_service import workspace_service
 
 router = APIRouter()
-
-
-class CompanySettingsRequest(BaseModel):
-    name: str = Field(min_length=2)
-    cnpj: str | None = None
-    email: str | None = None
-    phone: str | None = None
 
 
 class NotificationSettingsRequest(BaseModel):
@@ -28,21 +23,16 @@ class ChangePasswordRequest(BaseModel):
 
 
 @router.get("/settings/empresa")
-def obter_empresa(autorizado=Depends(verificar_token)):
-    return settings_service.obter_empresa()
+def obter_empresa(usuario: dict = Depends(obter_usuario_atual)):
+    return workspace_service.obter_empresa_settings(usuario)
 
 
 @router.patch("/settings/empresa")
 def salvar_empresa(
-    body: CompanySettingsRequest,
-    _admin: dict = Depends(requer_admin),
+    body: WorkspaceSettingsUpdate,
+    usuario: dict = Depends(obter_usuario_atual),
 ):
-    return settings_service.salvar_empresa(
-        name=body.name,
-        cnpj=body.cnpj,
-        email=body.email,
-        phone=body.phone,
-    )
+    return workspace_service.salvar_empresa_settings(usuario, body.model_dump(exclude_unset=True))
 
 
 @router.get("/settings/preferencias")
@@ -62,8 +52,16 @@ def salvar_preferencias(
 
 
 @router.get("/settings/permissoes")
-def obter_permissoes(payload: dict = Depends(obter_token_payload)):
-    return settings_service.permissoes_do_perfil(payload.get("role") or "user")
+def obter_permissoes(usuario: dict = Depends(obter_usuario_atual)):
+    context = workspace_service.get_current_workspace_context(usuario)
+    role_map = {
+        "owner": "admin",
+        "admin": "admin",
+        "supervisor": "supervisor",
+        "seller": "vendedor",
+        "member": "user",
+    }
+    return settings_service.permissoes_do_perfil(role_map.get(context.get("workspaceRole"), usuario.get("perfil") or "user"))
 
 
 @router.post("/settings/alterar-senha")

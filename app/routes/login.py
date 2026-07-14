@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.auth import obter_usuario_id, security
+from app.core.auth import obter_usuario_atual, obter_usuario_id, security
 from app.schemas.auth import (
     ForgotPasswordRequest,
     LoginRequest,
@@ -38,6 +38,11 @@ def register(body: RegisterRequest):
 @router.post("/refresh")
 def refresh(body: RefreshTokenRequest):
     return auth_service.refresh(body.refreshToken)
+
+
+@router.get("/me")
+def me(usuario: dict = Depends(obter_usuario_atual)):
+    return auth_service._mapear_usuario(usuario)
 
 
 @router.post("/logout")

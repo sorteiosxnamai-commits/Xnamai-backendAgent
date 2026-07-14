@@ -72,6 +72,16 @@ def obter_usuario_id(payload: dict = Depends(obter_token_payload)) -> str:
     return payload.get("sub", "")
 
 
+def obter_usuario_atual(payload: dict = Depends(obter_token_payload)) -> dict:
+    return _validar_usuario_ativo(payload.get("sub", ""))
+
+
+def obter_workspace_context(usuario: dict = Depends(obter_usuario_atual)) -> dict:
+    from app.services.workspace_service import workspace_service
+
+    return workspace_service.get_current_workspace_context(usuario)
+
+
 def requer_admin(payload: dict = Depends(obter_token_payload)) -> dict:
     if payload.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Apenas administradores podem executar esta ação")

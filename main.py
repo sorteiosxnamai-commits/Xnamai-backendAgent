@@ -20,6 +20,7 @@ from app.routes.settings import router as settings_router
 from app.routes.system import router as system_router
 from app.routes.webhooks import router as webhooks_router
 from app.routes.etl import router as etl_router
+from app.routes.workspace import router as workspace_router
 
 validar_jwt_secret()
 
@@ -48,6 +49,7 @@ api.include_router(usuarios_router, tags=["Usuarios"])
 api.include_router(whatsapp_router, tags=["WhatsApp"])
 api.include_router(settings_router, tags=["Settings"])
 api.include_router(system_router, tags=["System"])
+api.include_router(workspace_router, tags=["Workspace"])
 api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])

@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
-from app.core.auth import obter_token_payload, requer_admin, verificar_token
-from app.core.permissions import requer_permissao
+from app.core.auth import obter_token_payload, obter_usuario_atual
 from app.services.usuario_service import usuario_service
 
 router = APIRouter()
@@ -24,14 +23,14 @@ class UpdateUsuarioRequest(BaseModel):
 
 
 @router.get("/usuarios")
-def listar_usuarios(autorizado=Depends(verificar_token)):
-    return usuario_service.listar()
+def listar_usuarios(usuario: dict = Depends(obter_usuario_atual)):
+    return usuario_service.listar(usuario)
 
 
 @router.post("/usuarios")
 def criar_usuario(
     body: CreateUsuarioRequest,
-    _admin: dict = Depends(requer_permissao("manageUsers")),
+    usuario: dict = Depends(obter_usuario_atual),
 ):
     return usuario_service.criar(
         name=body.name,
@@ -39,6 +38,7 @@ def criar_usuario(
         password=body.password,
         role=body.role,
         company=body.company,
+        actor=usuario,
     )
 
 
