@@ -4,13 +4,12 @@ from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config.settings import SUPABASE_KEY, SUPABASE_URL, cors_origins, validar_jwt_secret
-from app.routes.cliente import router as cliente_router
-from app.routes.produto import router as produto_router
 from app.routes.login import router as login_router
 from app.routes.database import router as database_router
 from app.routes.dashboard import router as dashboard_router
 from app.routes.sincronizacao import router as sincronizacao_router
 from app.routes.pulsedesk import router as pulsedesk_router
+from app.routes.mercos import router as mercos_router
 from app.routes.platform import router as platform_router
 from app.routes.conversas import router as conversas_router
 from app.routes.agent import router as agent_router
@@ -56,8 +55,7 @@ api.include_router(workspace_router, tags=["Workspace"])
 api.include_router(personas_router, tags=["Personas"])
 api.include_router(billing_router, tags=["Billing"])
 api.include_router(internal_router, tags=["Internal"])
-api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
-api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
+api.include_router(mercos_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])
 api.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api.include_router(sincronizacao_router, prefix="/sincronizacao", tags=["Sincronizacao"])

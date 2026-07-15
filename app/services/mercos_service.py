@@ -1,7 +1,9 @@
 import json
+import logging
 import time
 
 import requests
+from fastapi import HTTPException
 
 from app.config.settings import (
     MERCOS_APPLICATION_TOKEN,
@@ -10,6 +12,20 @@ from app.config.settings import (
     mercos_ambiente,
     mercos_base_url_host,
 )
+
+logger = logging.getLogger(__name__)
+
+_SENSITIVE_KEYS = frozenset({
+    "applicationtoken",
+    "companytoken",
+    "token",
+    "authorization",
+    "password",
+    "senha",
+    "secret",
+    "apikey",
+    "api_key",
+})
 
 MAX_RETRIES = 4
 DEFAULT_RETRY_SECONDS = 6
@@ -119,18 +135,71 @@ class MercosService:
         return self._request_get(path, params).json()
 
     @staticmethod
+    def _sanitizar_corpo(body: dict | list | str | None):
+        """Remove chaves sensíveis do body antes de devolver ao cliente."""
+        if isinstance(body, dict):
+            return {
+                k: MercosService._sanitizar_corpo(v)
+                for k, v in body.items()
+                if str(k).lower().replace("-", "").replace("_", "") not in _SENSITIVE_KEYS
+                and str(k).lower() not in _SENSITIVE_KEYS
+            }
+        if isinstance(body, list):
+            return [MercosService._sanitizar_corpo(item) for item in body]
+        return body
+
+    @staticmethod
+    def _status_http_para_cliente(mercos_status: int) -> int:
+        """Mapeia status Mercos → HTTP da API PulseDesk (sem expor 401/403 da integração)."""
+        if mercos_status in (401, 403):
+            return 502
+        if mercos_status >= 500:
+            return 502
+        if 400 <= mercos_status < 500:
+            return mercos_status
+        return 502
+
+    @staticmethod
     def _resposta_escrita(response: requests.Response) -> dict:
         body: dict | list | str
         try:
             body = response.json()
         except (json.JSONDecodeError, ValueError):
             body = response.text
+
+        body_safe = MercosService._sanitizar_corpo(body)
+
+        if response.status_code >= 400:
+            logger.warning(
+                "Mercos escrita falhou: method=%s url_path=%s status=%s",
+                response.request.method if response.request else "?",
+                (response.request.path_url if response.request else "?"),
+                response.status_code,
+            )
+            raise HTTPException(
+                status_code=MercosService._status_http_para_cliente(response.status_code),
+                detail={
+                    "mercos_status": response.status_code,
+                    "resposta": body_safe,
+                },
+            )
+
         return {
             "status_code": response.status_code,
-            "resposta": body,
+            "resposta": body_safe,
             "meuspedidosid": response.headers.get("meuspedidosid")
             or response.headers.get("MeusPedidosID"),
         }
+
+    @staticmethod
+    def max_ultima_alteracao(registros: list[dict]) -> str | None:
+        """Maior ultima_alteracao da lista (cursor para sync incremental)."""
+        valores = [
+            str(row.get("ultima_alteracao"))
+            for row in registros
+            if isinstance(row, dict) and row.get("ultima_alteracao")
+        ]
+        return max(valores) if valores else None
 
     @staticmethod
     def _limitou_registros(response: requests.Response) -> bool:
@@ -277,6 +346,11 @@ class MercosService:
         return self._get(f"produtos/{mercos_id}")
 
     def obter_pedido(self, mercos_id: int | str):
+        """GET /pedidos/{id} na API v1.
+
+        Create/update usam /v2/pedidos; a consulta individual permanece em v1
+        (v2 cobre apenas inclusão/alteração de pedido simples).
+        """
         return self._get(f"pedidos/{mercos_id}")
 
     def listar_tabelas_preco(self, alterado_apos: str | None = None):
