@@ -22,6 +22,7 @@ from app.routes.webhooks import router as webhooks_router
 from app.routes.etl import router as etl_router
 from app.routes.workspace import router as workspace_router
 from app.routes.personas import router as personas_router
+from app.routes.billing import router as billing_router
 
 validar_jwt_secret()
 
@@ -52,6 +53,7 @@ api.include_router(settings_router, tags=["Settings"])
 api.include_router(system_router, tags=["System"])
 api.include_router(workspace_router, tags=["Workspace"])
 api.include_router(personas_router, tags=["Personas"])
+api.include_router(billing_router, tags=["Billing"])
 api.include_router(cliente_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(produto_router, prefix="/mercos", tags=["Mercos"])
 api.include_router(database_router, prefix="/database", tags=["Database"])

@@ -1,4 +1,5 @@
 from datetime import datetime
+import logging
 
 from fastapi import HTTPException
 
@@ -6,6 +7,8 @@ from app.repositories.catalog_repository import CatalogRepository
 from app.repositories.settings_repository import SettingsRepository
 from app.repositories.persona_repository import PersonaRepository
 from app.repositories.workspace_repository import WorkspaceRepository
+
+logger = logging.getLogger(__name__)
 
 WORKSPACE_ADMIN_ROLES = {"owner", "admin"}
 WORKSPACE_VIEW_ROLES = {"owner", "admin", "supervisor"}
@@ -52,6 +55,11 @@ class WorkspaceService:
             self.repo.criar_membership(workspace_id=workspace_id, user_id=user_id, role="owner")
             self.repo.criar_settings(workspace_id, {"currency": "BRL", "primary_contact": None})
             self.repo.criar_onboarding(workspace_id, status="pending", current_step="empresa")
+            try:
+                from app.services.billing_service import billing_service
+                billing_service.criar_trial(workspace_id, user_id)
+            except Exception:
+                logger.exception("Não foi possível criar o trial do workspace %s; cadastro preservado.", workspace_id)
         except Exception:
             self.repo.excluir_workspace(workspace_id)
             raise
