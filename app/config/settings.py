@@ -88,6 +88,7 @@ META_PHONE_NUMBER_ID = os.getenv("META_PHONE_NUMBER_ID", "")
 META_WEBHOOK_VERIFY_TOKEN = os.getenv("META_WEBHOOK_VERIFY_TOKEN", "pulsedesk_whatsapp_verify")
 META_API_VERSION = os.getenv("META_API_VERSION", "v21.0")
 PUBLIC_API_URL = os.getenv("PUBLIC_API_URL", "http://localhost:8000")
+NITRUS_INTERNAL_API_TOKEN = os.getenv("NITRUS_INTERNAL_API_TOKEN")
 
 # ETL agendado (Render Cron) — sync Mercos → Supabase sem sobrecarregar a API
 ETL_CRON_SECRET = os.getenv("ETL_CRON_SECRET", "")
