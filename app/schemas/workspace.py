@@ -67,3 +67,13 @@ class OnboardingUpdate(BaseModel):
     currentStep: str | None = None
     completedSteps: list[str] | None = None
     status: str | None = None
+
+
+class OnboardingTestRequest(BaseModel):
+    inputText: str = Field(min_length=1, max_length=4000)
+
+
+class WorkspaceChannelUpdate(BaseModel):
+    channelType: str
+    status: str = "configured"
+    configuration: dict = Field(default_factory=dict)

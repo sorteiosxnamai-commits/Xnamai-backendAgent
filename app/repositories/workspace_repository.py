@@ -154,6 +154,37 @@ class WorkspaceRepository:
         rows = resposta.data or []
         return rows[0] if rows else {"workspace_id": workspace_id, **payload}
 
+    def listar_canais(self, workspace_id: str) -> list[dict]:
+        resposta = (
+            supabase.table("workspace_channels").select("*")
+            .eq("workspace_id", workspace_id).order("channel_type").execute()
+        )
+        return resposta.data or []
+
+    def salvar_canal(self, workspace_id: str, channel_type: str, payload: dict) -> dict:
+        resposta = (
+            supabase.table("workspace_channels")
+            .upsert({"workspace_id": workspace_id, "channel_type": channel_type, **payload},
+                    on_conflict="workspace_id,channel_type")
+            .execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else {"workspace_id": workspace_id, "channel_type": channel_type, **payload}
+
+    def registrar_onboarding_test(self, payload: dict) -> dict:
+        resposta = supabase.table("workspace_onboarding_tests").insert(payload).execute()
+        rows = resposta.data or []
+        return rows[0] if rows else payload
+
+    def ultimo_teste_sucesso(self, workspace_id: str, persona_id: str) -> dict | None:
+        resposta = (
+            supabase.table("workspace_onboarding_tests").select("*")
+            .eq("workspace_id", workspace_id).eq("persona_id", persona_id)
+            .eq("status", "success").order("created_at", desc=True).limit(1).execute()
+        )
+        rows = resposta.data or []
+        return rows[0] if rows else None
+
     def excluir_workspace(self, workspace_id: str) -> None:
         (
             supabase
