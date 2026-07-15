@@ -43,33 +43,38 @@ class AuthService:
         return self._emitir_sessao(usuario)
 
     def register(self, name: str, email: str, password: str, company: str | None = None) -> dict:
-        email_normalizado = email.strip().lower()
-
-        if self.repository.buscar_por_email(email_normalizado):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este e-mail já está cadastrado")
-
-        dados = {
-            "email": email_normalizado,
-            "senha_hash": hash_senha(password),
-            "nome": name.strip(),
-            "perfil": "user",
-            "ativo": True,
-        }
-        if company and company.strip():
-            dados["empresa"] = company.strip()
-
-        usuario = self.repository.criar(dados)
+        usuario: dict | None = None
+        workspace: dict | None = None
         try:
-            workspace_service.criar_workspace_inicial(
+            email_normalizado = email.strip().lower()
+
+            if self.repository.buscar_por_email(email_normalizado):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Este e-mail já está cadastrado")
+
+            dados = {
+                "email": email_normalizado,
+                "senha_hash": hash_senha(password),
+                "nome": name.strip(),
+                "perfil": "user",
+                "ativo": True,
+            }
+            if company and company.strip():
+                dados["empresa"] = company.strip()
+
+            usuario = self.repository.criar(dados)
+            workspace = workspace_service.criar_workspace_inicial(
                 user_id=str(usuario.get("id")),
                 name=(company.strip() if company and company.strip() else name.strip()),
             )
+            return self._emitir_sessao(usuario)
+        except HTTPException:
+            raise
         except Exception:
-            if usuario.get("id"):
+            if workspace and workspace.get("id"):
+                workspace_service.excluir_workspace(str(workspace.get("id")))
+            if usuario and usuario.get("id"):
                 self.repository.excluir(str(usuario.get("id")))
             raise
-
-        return self._emitir_sessao(usuario)
 
     def refresh(self, refresh_token: str) -> dict:
         registro = self.token_repository.buscar_refresh(refresh_token)

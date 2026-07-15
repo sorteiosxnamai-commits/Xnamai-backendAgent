@@ -54,10 +54,17 @@ class WorkspaceService:
         workspace_id = str(workspace.get("id"))
         if not workspace_id:
             raise HTTPException(status_code=500, detail="Não foi possível criar o workspace")
-        self.repo.criar_membership(workspace_id=workspace_id, user_id=user_id, role="owner")
-        self.repo.criar_settings(workspace_id, {"currency": "BRL", "primary_contact": None})
-        self.repo.criar_onboarding(workspace_id, status="pending", current_step="business")
+        try:
+            self.repo.criar_membership(workspace_id=workspace_id, user_id=user_id, role="owner")
+            self.repo.criar_settings(workspace_id, {"currency": "BRL", "primary_contact": None})
+            self.repo.criar_onboarding(workspace_id, status="pending", current_step="business")
+        except Exception:
+            self.repo.excluir_workspace(workspace_id)
+            raise
         return workspace
+
+    def excluir_workspace(self, workspace_id: str) -> None:
+        self.repo.excluir_workspace(workspace_id)
 
     def _settings_response(self, row: dict | None) -> dict:
         row = row or {}

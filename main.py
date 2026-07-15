@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config.settings import cors_origins, validar_jwt_secret
+from app.config.settings import SUPABASE_KEY, SUPABASE_URL, cors_origins, validar_jwt_secret
 from app.routes.cliente import router as cliente_router
 from app.routes.produto import router as produto_router
 from app.routes.login import router as login_router
@@ -71,9 +71,9 @@ def home():
 @app.get("/health")
 def health():
     missing = []
-    if not os.getenv("SUPABASE_URL"):
+    if not SUPABASE_URL:
         missing.append("SUPABASE_URL")
-    if not os.getenv("SUPABASE_KEY"):
+    if not SUPABASE_KEY:
         missing.append("SUPABASE_KEY")
     if not os.getenv("JWT_SECRET"):
         missing.append("JWT_SECRET")

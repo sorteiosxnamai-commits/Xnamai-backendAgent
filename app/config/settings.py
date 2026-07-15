@@ -31,7 +31,12 @@ def mercos_base_url_host() -> str | None:
         return MERCOS_BASE_URL
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+SUPABASE_KEY = (
+    os.getenv("SUPABASE_KEY")
+    or os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    or os.getenv("SUPABASE_PUBLISHABLE_KEY")
+    or os.getenv("SUPABASE_ANON_KEY")
+)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 AUTH_RESET_DEBUG = os.getenv("AUTH_RESET_DEBUG", "true").lower() == "true"

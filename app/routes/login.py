@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
 
 from app.core.auth import obter_usuario_atual, obter_usuario_id, security
@@ -15,6 +17,7 @@ from app.services.auth_service import AuthService
 
 router = APIRouter()
 auth_service = AuthService()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/login")
@@ -27,12 +30,27 @@ def login(credentials: LoginRequest):
 
 @router.post("/register")
 def register(body: RegisterRequest):
-    return auth_service.register(
-        name=body.name,
-        email=body.email,
-        password=body.password,
-        company=body.company,
-    )
+    try:
+        return auth_service.register(
+            name=body.name,
+            email=body.email,
+            password=body.password,
+            company=body.company,
+        )
+    except HTTPException:
+        raise
+    except RuntimeError as exc:
+        logger.exception("Falha de configuracao no cadastro empresarial")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Configuracao Supabase ausente ou invalida.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Falha ao concluir cadastro empresarial")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Nao foi possivel concluir o cadastro.",
+        ) from exc
 
 
 @router.post("/refresh")

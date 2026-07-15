@@ -153,3 +153,12 @@ class WorkspaceRepository:
         )
         rows = resposta.data or []
         return rows[0] if rows else {"workspace_id": workspace_id, **payload}
+
+    def excluir_workspace(self, workspace_id: str) -> None:
+        (
+            supabase
+            .table("workspaces")
+            .delete()
+            .eq("id", workspace_id)
+            .execute()
+        )
