@@ -3,7 +3,7 @@ import sys
 import types
 from unittest.mock import Mock
 
-fastapi_stub = types.ModuleType("fastapi")
+fastapi_stub = sys.modules.get("fastapi") or types.ModuleType("fastapi")
 
 
 class HTTPException(Exception):
@@ -13,7 +13,8 @@ class HTTPException(Exception):
         self.detail = detail
 
 
-fastapi_stub.HTTPException = HTTPException
+fastapi_stub.HTTPException = getattr(fastapi_stub, "HTTPException", HTTPException)
+HTTPException = fastapi_stub.HTTPException
 sys.modules.setdefault("fastapi", fastapi_stub)
 
 supabase_stub = types.ModuleType("supabase")
