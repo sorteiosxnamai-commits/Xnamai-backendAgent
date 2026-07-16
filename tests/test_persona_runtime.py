@@ -18,6 +18,7 @@ class HTTPException(Exception):
 fastapi_stub.HTTPException = getattr(fastapi_stub, "HTTPException", HTTPException)
 fastapi_stub.Header = getattr(fastapi_stub, "Header", lambda default=None, **_kwargs: default)
 sys.modules.setdefault("fastapi", fastapi_stub)
+HTTPException = fastapi_stub.HTTPException
 
 supabase_stub = types.ModuleType("supabase")
 supabase_stub.Client = object
