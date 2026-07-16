@@ -9,7 +9,7 @@ import time
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.core.auth import verificar_token
+from app.core.auth import obter_workspace_context, verificar_token
 from app.core.permissions import requer_permissao
 from app.repositories.mercos_sync_repository import MercosSyncRepository
 from app.schemas.mercos import (
@@ -85,8 +85,8 @@ def _payload(model: BaseModel) -> dict:
 
 
 @router.get("/status")
-def get_mercos_status(autorizado=Depends(verificar_token)):
-    return mercos_status()
+def get_mercos_status(workspace=Depends(obter_workspace_context)):
+    return mercos_status(workspace["workspaceId"])
 
 
 @router.get("/logs")
@@ -129,6 +129,7 @@ def testar_conexao_mercos(autorizado=Depends(verificar_token)):
 @router.post("/sincronizar")
 def sincronizar_mercos(
     body: MercosSyncRequest,
+    workspace=Depends(obter_workspace_context),
     _: dict = _PERM_ESCRITA,
 ):
     tipo = body.type
@@ -139,21 +140,21 @@ def sincronizar_mercos(
         prefix = f"[{ambiente}] "
 
         if tipo == "customers":
-            resultado = cliente_service.sincronizar()
+            resultado = cliente_service.sincronizar(workspace["workspaceId"])
             qtd = resultado.get("clientes_sincronizados", 0)
             msg = f"{prefix}Clientes sincronizados: {qtd}"
             _registrar_sync("customers", msg, qtd)
             return {"success": True, "message": msg}
 
         if tipo == "products":
-            resultado = produto_service.sincronizar(incremental=False)
+            resultado = produto_service.sincronizar(workspace["workspaceId"], incremental=False)
             qtd = resultado.get("produtos_sincronizados", 0)
             msg = f"{prefix}Produtos sincronizados: {qtd} (nenhum apagado)"
             _registrar_sync("products", msg, qtd)
             return {"success": True, "message": msg}
 
         if tipo == "orders":
-            resultado = pedido_service.sincronizar()
+            resultado = pedido_service.sincronizar(workspace["workspaceId"])
             qtd = resultado.get("pedidos_sincronizados", 0)
             msg = resultado.get("mensagem") or f"{prefix}Pedidos sincronizados: {qtd}"
             funil_msg = _sincronizar_funil_apos_pedidos()
@@ -163,11 +164,11 @@ def sincronizar_mercos(
                 "resumo": resultado.get("resumo"),
             }
 
-        c = cliente_service.sincronizar()
+        c = cliente_service.sincronizar(workspace["workspaceId"])
         time.sleep(6)
-        p = produto_service.sincronizar(incremental=False)
+        p = produto_service.sincronizar(workspace["workspaceId"], incremental=False)
         time.sleep(6)
-        o = pedido_service.sincronizar(incremental=False)
+        o = pedido_service.sincronizar(workspace["workspaceId"], incremental=False)
         msg = (
             f"{prefix}Sincronização concluída — "
             f"clientes: {c.get('clientes_sincronizados', 0)}, "
@@ -216,8 +217,11 @@ def alterar_cliente(cliente_id: int, dados: MercosClienteCreate, _: dict = _PERM
 
 
 @router.post("/clientes/sincronizar")
-def sincronizar_clientes(_: dict = _PERM_ESCRITA):
-    return cliente_service.sincronizar()
+def sincronizar_clientes(
+    workspace=Depends(obter_workspace_context),
+    _: dict = _PERM_ESCRITA,
+):
+    return cliente_service.sincronizar(workspace["workspaceId"])
 
 
 # --- Produtos ---
@@ -239,8 +243,11 @@ def criar_produto(dados: MercosProdutoCreate, _: dict = _PERM_ESCRITA):
 
 
 @router.post("/produtos/sincronizar")
-def sincronizar_produtos(_: dict = _PERM_ESCRITA):
-    return produto_service.sincronizar()
+def sincronizar_produtos(
+    workspace=Depends(obter_workspace_context),
+    _: dict = _PERM_ESCRITA,
+):
+    return produto_service.sincronizar(workspace["workspaceId"])
 
 
 # --- Pedidos ---

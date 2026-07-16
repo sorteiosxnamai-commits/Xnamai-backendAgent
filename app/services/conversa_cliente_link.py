@@ -23,7 +23,7 @@ def normalizar_telefone_cliente(valor: str | int | None) -> str | None:
     return digitos
 
 
-def _buscar_id_por_mercos(cliente_mercos_id: str | int) -> str | None:
+def _buscar_id_por_mercos(workspace_id: str, cliente_mercos_id: str | int) -> str | None:
     texto = str(cliente_mercos_id).strip()
     if not texto or not texto.isdigit():
         return None
@@ -31,6 +31,7 @@ def _buscar_id_por_mercos(cliente_mercos_id: str | int) -> str | None:
         resposta = (
             supabase.table("clientes")
             .select("id")
+            .eq("workspace_id", workspace_id)
             .eq("mercos_id", int(texto))
             .limit(1)
             .execute()
@@ -45,7 +46,7 @@ def _buscar_id_por_mercos(cliente_mercos_id: str | int) -> str | None:
     return str(cid) if cid else None
 
 
-def _buscar_id_por_telefone(telefone: str) -> str | None:
+def _buscar_id_por_telefone(workspace_id: str, telefone: str) -> str | None:
     tel = normalizar_telefone_cliente(telefone)
     if not tel:
         return None
@@ -54,6 +55,7 @@ def _buscar_id_por_telefone(telefone: str) -> str | None:
             resposta = (
                 supabase.table("clientes")
                 .select("id")
+                .eq("workspace_id", workspace_id)
                 .eq(campo, tel)
                 .limit(1)
                 .execute()
@@ -69,16 +71,19 @@ def _buscar_id_por_telefone(telefone: str) -> str | None:
 
 def resolver_cliente_id_conversa(
     *,
+    workspace_id: str | None,
     cliente_mercos_id: str | int | None = None,
     telefone: str | None = None,
 ) -> str | None:
     """Retorna clientes.id (uuid) ou None. Não inventa vínculo."""
+    if not workspace_id:
+        return None
     if cliente_mercos_id is not None and str(cliente_mercos_id).strip():
-        encontrado = _buscar_id_por_mercos(cliente_mercos_id)
+        encontrado = _buscar_id_por_mercos(workspace_id, cliente_mercos_id)
         if encontrado:
             return encontrado
     if telefone:
-        return _buscar_id_por_telefone(telefone)
+        return _buscar_id_por_telefone(workspace_id, telefone)
     return None
 
 
@@ -106,6 +111,7 @@ def enriquecer_dados_conversa_com_cliente_id(
     )
 
     resolvido = resolver_cliente_id_conversa(
+        workspace_id=out.get("workspace_id") or (existente or {}).get("workspace_id"),
         cliente_mercos_id=mercos,
         telefone=telefone,
     )

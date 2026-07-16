@@ -129,9 +129,9 @@ class WorkspaceService:
     def _operation_configured(self, settings: dict) -> bool:
         return bool(settings.get("sales_model") in SALES_MODELS and isinstance(settings.get("sales_channels"), list) and settings.get("sales_channels") and str(settings.get("business_hours") or "").strip() and str(settings.get("primary_contact") or "").strip())
 
-    def _catalog(self) -> dict:
+    def _catalog(self, workspace_id: str) -> dict:
         try:
-            count = self.catalog_repo.contar_produtos()
+            count = self.catalog_repo.contar_produtos(workspace_id)
         except Exception:
             count = 0
         return {"catalogAvailable": count > 0, "catalogScope": "legacy_global" if count > 0 else "none", "catalogProductCount": count}
@@ -144,7 +144,7 @@ class WorkspaceService:
         active_persona = active[0] if len(active) == 1 else None
         channels = self.repo.listar_canais(workspace_id)
         channel_configured = any(row.get("status") in {"configured", "active"} for row in channels)
-        catalog = self._catalog()
+        catalog = self._catalog(workspace_id)
         test_completed = bool(active_persona and self.repo.ultimo_teste_sucesso(workspace_id, str(active_persona.get("id"))))
         return {"companyConfigured": self._company_configured(workspace, settings), "operationConfigured": self._operation_configured(settings), **catalog, "channelConfigured": channel_configured, "personaCreated": bool(personas), "personaActive": bool(active_persona), "testCompleted": test_completed, "readyForActivation": bool(self._company_configured(workspace, settings) and self._operation_configured(settings) and catalog["catalogAvailable"] and channel_configured and active_persona and test_completed)}
 

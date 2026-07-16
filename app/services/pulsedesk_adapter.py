@@ -82,8 +82,13 @@ def _map_pedido(row: dict, clientes_por_id: dict | None = None) -> dict:
     }
 
 
-def _clientes_index() -> dict:
-    resposta = supabase.table("clientes").select("mercos_id,nome,razao_social").execute()
+def _clientes_index(workspace_id: str) -> dict:
+    resposta = (
+        supabase.table("clientes")
+        .select("mercos_id,nome,razao_social")
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
     return {
         str(row.get("mercos_id")): row
         for row in (resposta.data or [])
@@ -91,8 +96,13 @@ def _clientes_index() -> dict:
     }
 
 
-def listar_clientes(page: int = 1, page_size: int = 10, search: str = "") -> dict:
-    resposta = supabase.table("clientes").select("*").execute()
+def listar_clientes(workspace_id: str, page: int = 1, page_size: int = 10, search: str = "") -> dict:
+    resposta = (
+        supabase.table("clientes")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
     rows = resposta.data or []
 
     if search:
@@ -110,11 +120,23 @@ def listar_clientes(page: int = 1, page_size: int = 10, search: str = "") -> dic
     return _paginate([_map_cliente(row) for row in rows], page, page_size)
 
 
-def obter_cliente(cliente_id: str) -> dict | None:
-    resposta = supabase.table("clientes").select("*").eq("mercos_id", cliente_id).execute()
+def obter_cliente(workspace_id: str, cliente_id: str) -> dict | None:
+    resposta = (
+        supabase.table("clientes")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .eq("mercos_id", cliente_id)
+        .execute()
+    )
     rows = resposta.data or []
     if not rows:
-        resposta = supabase.table("clientes").select("*").eq("id", cliente_id).execute()
+        resposta = (
+            supabase.table("clientes")
+            .select("*")
+            .eq("workspace_id", workspace_id)
+            .eq("id", cliente_id)
+            .execute()
+        )
         rows = resposta.data or []
     if not rows:
         return None
@@ -127,6 +149,7 @@ def obter_cliente(cliente_id: str) -> dict | None:
             supabase
             .table("pedidos")
             .select("*")
+            .eq("workspace_id", workspace_id)
             .eq("cliente_mercos_id", mercos_id)
             .order("data_pedido", desc=True)
             .execute()
@@ -146,8 +169,13 @@ def obter_cliente(cliente_id: str) -> dict | None:
     return cliente
 
 
-def listar_produtos(page: int = 1, page_size: int = 10, search: str = "", category: str | None = None) -> dict:
-    resposta = supabase.table("produtos").select("*").execute()
+def listar_produtos(workspace_id: str, page: int = 1, page_size: int = 10, search: str = "", category: str | None = None) -> dict:
+    resposta = (
+        supabase.table("produtos")
+        .select("*")
+        .eq("workspace_id", workspace_id)
+        .execute()
+    )
     rows = resposta.data or []
 
     if search:
@@ -164,14 +192,19 @@ def listar_produtos(page: int = 1, page_size: int = 10, search: str = "", catego
     return _paginate([_map_produto(row) for row in rows], page, page_size)
 
 
-def listar_pedidos(page: int = 1, page_size: int = 10, search: str = "", status: str | None = None) -> dict:
+def listar_pedidos(workspace_id: str, page: int = 1, page_size: int = 10, search: str = "", status: str | None = None) -> dict:
     try:
-        resposta = supabase.table("pedidos").select("*").execute()
+        resposta = (
+            supabase.table("pedidos")
+            .select("*")
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
         rows = resposta.data or []
     except Exception:
         rows = []
 
-    clientes = _clientes_index()
+    clientes = _clientes_index(workspace_id)
     mapped = [_map_pedido(row, clientes) for row in rows]
 
     if search:
@@ -188,11 +221,11 @@ def listar_pedidos(page: int = 1, page_size: int = 10, search: str = "", status:
     return _paginate(mapped, page, page_size)
 
 
-def dashboard_data() -> dict:
-    return DashboardService().montar()
+def dashboard_data(workspace_id: str) -> dict:
+    return DashboardService().montar(workspace_id)
 
 
-def mercos_status() -> dict:
+def mercos_status(workspace_id: str) -> dict:
     from app.repositories.mercos_sync_repository import MercosSyncRepository
     from app.services.mercos_service import mercos_configurado, mercos_info
     from app.services.pedido_service import PedidoService
@@ -203,7 +236,7 @@ def mercos_status() -> dict:
     info = mercos_info()
 
     last_sync = sync_repo.ultima_sincronizacao("orders") or sync_repo.ultima_sincronizacao("all")
-    resumo = pedido_service.resumo_situacoes()
+    resumo = pedido_service.resumo_situacoes(workspace_id)
 
     return {
         "connected": mercos_configurado(),
@@ -212,9 +245,9 @@ def mercos_status() -> dict:
         "isSandbox": info["isSandbox"],
         "baseUrlHost": info["baseUrlHost"],
         "lastSync": last_sync or datetime.utcnow().isoformat(),
-        "syncedProducts": repo.contar_produtos() or 0,
-        "syncedCustomers": repo.contar_clientes() or 0,
-        "syncedOrders": repo.contar_pedidos() or 0,
+        "syncedProducts": repo.contar_produtos(workspace_id) or 0,
+        "syncedCustomers": repo.contar_clientes(workspace_id) or 0,
+        "syncedOrders": repo.contar_pedidos(workspace_id) or 0,
         "orderStatusBreakdown": resumo.get("breakdown") or [],
         "allOrdersProcessing": resumo.get("allOrdersProcessing", False),
         "retainedRevenue": resumo.get("retainedRevenue", 0),

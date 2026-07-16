@@ -99,6 +99,10 @@ class ChatbotService:
             return None
 
         history = self._build_history(messages)
+        workspace_id = str(conversa.get("workspace_id") or "").strip()
+        if not workspace_id:
+            logger.warning("Conversa %s sem workspace_id; automacao bloqueada.", conversa_id)
+            return None
         prompt = (
             f"Fluxo ativo: {flow.get('name')}. "
             "Responda ao CLIENTE final (nao ao atendente). "
@@ -108,7 +112,8 @@ class ChatbotService:
 
         try:
             result = agent_service.chat(
-                prompt,
+                workspace_id=workspace_id,
+                message=prompt,
                 conversation_id=conversa_id,
                 customer_id=str(conversa.get("cliente_mercos_id") or "") or None,
                 mode="agent",

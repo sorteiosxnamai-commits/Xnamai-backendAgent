@@ -157,9 +157,9 @@ def _chart_tempo_resposta_horario(mensagens: list[dict]) -> list[dict]:
     return chart
 
 
-def _contar_campanhas_enviadas() -> int:
+def _contar_campanhas_enviadas(workspace_id: str) -> int:
     try:
-        resposta = supabase.table("campanhas").select("sent").execute()
+        resposta = supabase.table("campanhas").select("sent").eq("workspace_id", workspace_id).execute()
         return sum(int(row.get("sent") or 0) for row in (resposta.data or []))
     except Exception:
         return 0
@@ -172,16 +172,17 @@ class DashboardService:
         self.conversas = ConversaRepository()
         self.mensagens = MensagemRepository()
 
-    def resumo(self):
+    def resumo(self, workspace_id: str):
         return {
-            "clientes": self.repository.contar_clientes(),
-            "produtos": self.repository.contar_produtos(),
-            "pedidos": self.repository.contar_pedidos(),
+            "clientes": self.repository.contar_clientes(workspace_id),
+            "produtos": self.repository.contar_produtos(workspace_id),
+            "pedidos": self.repository.contar_pedidos(workspace_id),
         }
 
-    def _contar_conversas_por_status(self) -> dict[str, int]:
+    def _contar_conversas_por_status(self, workspace_id: str) -> dict[str, int]:
         try:
-            rows = self.conversas.listar()
+            resposta = supabase.table("conversas").select("status").eq("workspace_id", workspace_id).execute()
+            rows = resposta.data or []
         except Exception:
             return {"active": 0, "waiting": 0, "closed": 0}
 
@@ -192,16 +193,16 @@ class DashboardService:
                 counts[status] += 1
         return counts
 
-    def _carregar_linhas(self, tabela: str, campo_data: str = "created_at") -> list[dict]:
+    def _carregar_linhas(self, tabela: str, workspace_id: str, campo_data: str = "created_at") -> list[dict]:
         try:
-            resposta = supabase.table(tabela).select(campo_data).execute()
+            resposta = supabase.table(tabela).select(campo_data).eq("workspace_id", workspace_id).execute()
             return resposta.data or []
         except Exception:
             return []
 
-    def _stats_mensagens(self) -> dict:
+    def _stats_mensagens(self, workspace_id: str) -> dict:
         try:
-            resposta = supabase.table("mensagens").select("sender,conversa_id,created_at").execute()
+            resposta = supabase.table("mensagens").select("sender,conversa_id,created_at").eq("workspace_id", workspace_id).execute()
             rows = resposta.data or []
         except Exception:
             return {"total": 0, "ai": 0, "bot_pct": 0, "avg_response": "—", "rows": []}
@@ -217,15 +218,15 @@ class DashboardService:
             "rows": rows,
         }
 
-    def montar(self) -> dict:
-        status = self._contar_conversas_por_status()
-        msg_stats = self._stats_mensagens()
+    def montar(self, workspace_id: str) -> dict:
+        status = self._contar_conversas_por_status(workspace_id)
+        msg_stats = self._stats_mensagens(workspace_id)
 
-        clientes_rows = self._carregar_linhas("clientes")
-        pedidos_rows = self._carregar_linhas("pedidos")
-        conversas_rows = self._carregar_linhas("conversas", "last_message_at")
+        clientes_rows = self._carregar_linhas("clientes", workspace_id)
+        pedidos_rows = self._carregar_linhas("pedidos", workspace_id)
+        conversas_rows = self._carregar_linhas("conversas", workspace_id, "last_message_at")
         if not conversas_rows:
-            conversas_rows = self._carregar_linhas("conversas", "created_at")
+            conversas_rows = self._carregar_linhas("conversas", workspace_id, "created_at")
 
         clientes_dia = _contar_por_dia(clientes_rows, "created_at")
         pedidos_dia = _contar_por_dia(pedidos_rows, "created_at")
@@ -244,9 +245,9 @@ class DashboardService:
             for label in labels
         ]
 
-        total_clientes = self.repository.contar_clientes() or 0
-        total_produtos = self.repository.contar_produtos() or 0
-        total_pedidos = self.repository.contar_pedidos() or 0
+        total_clientes = self.repository.contar_clientes(workspace_id) or 0
+        total_produtos = self.repository.contar_produtos(workspace_id) or 0
+        total_pedidos = self.repository.contar_pedidos(workspace_id) or 0
         total_conversas = sum(status.values())
 
         return {
@@ -256,7 +257,7 @@ class DashboardService:
                 "waitingQueue": status["waiting"],
                 "avgResponseTime": msg_stats["avg_response"],
                 "aiOnline": openai_configured(),
-                "campaignsSent": _contar_campanhas_enviadas(),
+                "campaignsSent": _contar_campanhas_enviadas(workspace_id),
                 "botResolved": msg_stats["bot_pct"],
                 "totalCustomers": total_clientes,
                 "totalProducts": total_produtos,

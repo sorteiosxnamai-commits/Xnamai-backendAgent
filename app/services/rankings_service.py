@@ -49,20 +49,20 @@ class RankingsService:
     def __init__(self):
         self.pedidos_repo = PedidoRepository()
 
-    def _load_pedidos(self) -> list[dict]:
-        return self.pedidos_repo.listar()
+    def _load_pedidos(self, workspace_id: str) -> list[dict]:
+        return self.pedidos_repo.listar(workspace_id)
 
-    def _load_clientes(self) -> list[dict]:
+    def _load_clientes(self, workspace_id: str) -> list[dict]:
         try:
-            resposta = supabase.table("clientes").select("*").execute()
+            resposta = supabase.table("clientes").select("*").eq("workspace_id", workspace_id).execute()
             return resposta.data or []
         except Exception as exc:
             logger.warning("Rankings: falha ao listar clientes: %s", exc)
             return []
 
-    def _load_produtos(self) -> list[dict]:
+    def _load_produtos(self, workspace_id: str) -> list[dict]:
         try:
-            resposta = supabase.table("produtos").select("*").execute()
+            resposta = supabase.table("produtos").select("*").eq("workspace_id", workspace_id).execute()
             return resposta.data or []
         except Exception as exc:
             logger.warning("Rankings: falha ao listar produtos: %s", exc)
@@ -123,10 +123,10 @@ class RankingsService:
 
         return "Produto não informado", codigo
 
-    def _montar_rankings(self, *, limit: int = 10) -> dict:
-        pedidos = self._load_pedidos()
-        clientes = self._load_clientes()
-        catalogo = self._load_produtos()
+    def _montar_rankings(self, workspace_id: str, *, limit: int = 10) -> dict:
+        pedidos = self._load_pedidos(workspace_id)
+        clientes = self._load_clientes(workspace_id)
+        catalogo = self._load_produtos(workspace_id)
         produto_por_numero = self._mapa_produto_por_pedido()
 
         clientes_por_id = {
@@ -241,9 +241,9 @@ class RankingsService:
             },
         }
 
-    def rankings(self, *, limit: int = 10) -> dict:
+    def rankings(self, workspace_id: str, *, limit: int = 10) -> dict:
         try:
-            return self._montar_rankings(limit=max(3, min(limit, 50)))
+            return self._montar_rankings(workspace_id, limit=max(3, min(limit, 50)))
         except Exception as exc:
             logger.exception("Erro ao calcular rankings: %s", exc)
             return {

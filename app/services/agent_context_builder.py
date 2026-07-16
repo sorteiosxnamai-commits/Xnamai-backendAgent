@@ -37,6 +37,7 @@ class AgentContextBuilder:
 
     def build(
         self,
+        workspace_id: str,
         conversation_id: str | None = None,
         customer_id: str | None = None,
         history: list[dict] | None = None,
@@ -82,19 +83,19 @@ class AgentContextBuilder:
         ]))
 
         if not customer_id:
-            customer_id = self._resolve_customer_id(search_text, all_conversations)
+            customer_id = self._resolve_customer_id(workspace_id, search_text, all_conversations)
 
         customer = None
         customer_detail = None
         orders: list[dict] = []
         if customer_id:
             try:
-                customer = obter_cliente(str(customer_id))
+                customer = obter_cliente(workspace_id, str(customer_id))
                 if customer:
                     customer_detail = dict(customer)
                     orders = list(customer.get("orders") or [])
                     if not orders:
-                        orders = self._load_orders_for_customer(str(customer_id), customer.get("name"))
+                        orders = self._load_orders_for_customer(workspace_id, str(customer_id), customer.get("name"))
                     customer["ordersCount"] = len(orders)
                     customer["totalSpent"] = sum(_safe_float(o.get("total")) for o in orders)
                     customer_detail["orders"] = orders[:10]
@@ -104,12 +105,12 @@ class AgentContextBuilder:
                 orders = []
 
         try:
-            products = self._load_relevant_products(search_text)
+            products = self._load_relevant_products(workspace_id, search_text)
         except Exception:
             products = []
 
         try:
-            related_orders = self._search_orders(search_text, orders)
+            related_orders = self._search_orders(workspace_id, search_text, orders)
         except Exception:
             related_orders = orders[:3]
 
@@ -127,9 +128,9 @@ class AgentContextBuilder:
             last_customer_msg = conversation.get("lastMessage")
 
         products_catalog = self._format_catalog(products)
-        platform_stats = self._platform_stats()
-        sales_metrics = self._load_sales_metrics()
-        recent_orders = self._load_recent_orders()
+        platform_stats = self._platform_stats(workspace_id)
+        sales_metrics = self._load_sales_metrics(workspace_id)
+        recent_orders = self._load_recent_orders(workspace_id)
 
         return {
             "conversation": conversation,
@@ -150,7 +151,7 @@ class AgentContextBuilder:
             "userMessage": user_message,
         }
 
-    def _load_orders_for_customer(self, customer_id: str, customer_name: str | None = None) -> list[dict]:
+    def _load_orders_for_customer(self, workspace_id: str, customer_id: str, customer_name: str | None = None) -> list[dict]:
         matched: list[dict] = []
         search_terms = [customer_id]
         if customer_name:
@@ -159,7 +160,7 @@ class AgentContextBuilder:
         seen: set[str] = set()
         for term in search_terms:
             try:
-                resp = listar_pedidos(page=1, page_size=200, search=term)
+                resp = listar_pedidos(workspace_id, page=1, page_size=200, search=term)
                 for order in resp.get("data") or []:
                     if str(order.get("customerId")) != str(customer_id):
                         continue
@@ -171,7 +172,7 @@ class AgentContextBuilder:
                 continue
         return matched
 
-    def _resolve_customer_id(self, text: str, conversations: list[dict]) -> str | None:
+    def _resolve_customer_id(self, workspace_id: str, text: str, conversations: list[dict]) -> str | None:
         norm = _normalize(text)
         for conv in conversations:
             name = _normalize(conv.get("customerName") or "")
@@ -184,7 +185,7 @@ class AgentContextBuilder:
         words = [w for w in re.findall(r"[a-záàâãéêíóôõúç]{4,}", norm) if w not in _STOP_WORDS]
         for word in words[:3]:
             try:
-                result = listar_clientes(page=1, page_size=5, search=word)
+                result = listar_clientes(workspace_id, page=1, page_size=5, search=word)
                 items = result.get("data") or []
                 if items:
                     return items[0].get("id")
@@ -192,13 +193,13 @@ class AgentContextBuilder:
                 continue
         return None
 
-    def _load_relevant_products(self, search_text: str) -> list[dict]:
+    def _load_relevant_products(self, workspace_id: str, search_text: str) -> list[dict]:
         terms = self._extract_search_terms(search_text)
         found: dict[str, dict] = {}
 
         for term in terms[:4]:
             try:
-                resp = listar_produtos(page=1, page_size=15, search=term)
+                resp = listar_produtos(workspace_id, page=1, page_size=15, search=term)
                 for p in resp.get("data") or []:
                     found[str(p.get("id"))] = p
             except Exception:
@@ -206,7 +207,7 @@ class AgentContextBuilder:
 
         if len(found) < 20:
             try:
-                resp = listar_produtos(page=1, page_size=40)
+                resp = listar_produtos(workspace_id, page=1, page_size=40)
                 for p in resp.get("data") or []:
                     found[str(p.get("id"))] = p
             except Exception:
@@ -225,14 +226,14 @@ class AgentContextBuilder:
                 terms.append(word)
         return terms
 
-    def _search_orders(self, text: str, customer_orders: list[dict]) -> list[dict]:
+    def _search_orders(self, workspace_id: str, text: str, customer_orders: list[dict]) -> list[dict]:
         nums = re.findall(r"#?(\d{3,})", text or "")
         if not nums:
             return customer_orders[:3]
 
         pools: list[dict] = list(customer_orders)
         try:
-            pedidos_resp = listar_pedidos(page=1, page_size=200)
+            pedidos_resp = listar_pedidos(workspace_id, page=1, page_size=200)
             pools.extend(pedidos_resp.get("data") or [])
         except Exception:
             pass
@@ -258,12 +259,12 @@ class AgentContextBuilder:
             for p in products
         )
 
-    def _platform_stats(self) -> dict:
+    def _platform_stats(self, workspace_id: str) -> dict:
         try:
             stats = {
-                "clientes": self.dashboard.contar_clientes() or 0,
-                "produtos": self.dashboard.contar_produtos() or 0,
-                "pedidos": self.dashboard.contar_pedidos() or 0,
+                "clientes": self.dashboard.contar_clientes(workspace_id) or 0,
+                "produtos": self.dashboard.contar_produtos(workspace_id) or 0,
+                "pedidos": self.dashboard.contar_pedidos(workspace_id) or 0,
             }
             try:
                 from app.repositories.mercos_sync_repository import MercosSyncRepository
@@ -279,16 +280,16 @@ class AgentContextBuilder:
         except Exception:
             return {"clientes": 0, "produtos": 0, "pedidos": 0, "lastMercosSync": None}
 
-    def _load_sales_metrics(self) -> dict:
+    def _load_sales_metrics(self, workspace_id: str) -> dict:
         try:
-            return vendas_service.metricas()
+            return vendas_service.metricas(workspace_id)
         except Exception as exc:
             logger.warning("Falha ao carregar métricas de venda: %s", exc)
             return {}
 
-    def _load_recent_orders(self, limit: int = 25) -> list[dict]:
+    def _load_recent_orders(self, workspace_id: str, limit: int = 25) -> list[dict]:
         try:
-            resp = listar_pedidos(page=1, page_size=limit)
+            resp = listar_pedidos(workspace_id, page=1, page_size=limit)
             return resp.get("data") or []
         except Exception:
             return []
@@ -564,11 +565,6 @@ def _find_order(ctx: dict, text: str) -> dict | None:
     pools: list[dict] = []
     pools.extend(detail_orders)
     pools.extend(orders)
-    try:
-        pedidos_resp = listar_pedidos(page=1, page_size=200)
-        pools.extend(pedidos_resp.get("data") or [])
-    except Exception:
-        pass
     pools.extend(ctx.get("recentOrders") or [])
 
     seen: set[str] = set()

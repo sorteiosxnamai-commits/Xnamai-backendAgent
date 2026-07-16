@@ -57,25 +57,26 @@ class AgentService:
 
     def build_context(
         self,
+        workspace_id: str,
         conversation_id: str | None = None,
         customer_id: str | None = None,
         history: list[dict] | None = None,
         user_message: str | None = None,
     ) -> dict:
-        return self.context_builder.build(conversation_id, customer_id, history, user_message)
+        return self.context_builder.build(workspace_id, conversation_id, customer_id, history, user_message)
 
-    def _minimal_context(self, message: str) -> dict:
+    def _minimal_context(self, workspace_id: str, message: str) -> dict:
         products: list[dict] = []
         try:
             from app.services.pulsedesk_adapter import listar_produtos
-            products = listar_produtos(page=1, page_size=40).get("data") or []
+            products = listar_produtos(workspace_id, page=1, page_size=40).get("data") or []
         except Exception:
             products = []
         return {
             "userMessage": message,
-            "salesMetrics": self.context_builder._load_sales_metrics(),
-            "platformStats": self.context_builder._platform_stats(),
-            "recentOrders": self.context_builder._load_recent_orders(),
+            "salesMetrics": self.context_builder._load_sales_metrics(workspace_id),
+            "platformStats": self.context_builder._platform_stats(workspace_id),
+            "recentOrders": self.context_builder._load_recent_orders(workspace_id),
             "products": products,
             "productsCatalog": self.context_builder._format_catalog(products),
             "messages": [],
@@ -87,6 +88,7 @@ class AgentService:
 
     def chat(
         self,
+        workspace_id: str,
         message: str,
         conversation_id: str | None = None,
         customer_id: str | None = None,
@@ -97,10 +99,10 @@ class AgentService:
         conv_id = conversation_id or f"conv-{uuid.uuid4().hex[:8]}"
 
         try:
-            ctx = self.context_builder.build(conversation_id, customer_id, history, message)
+            ctx = self.context_builder.build(workspace_id, conversation_id, customer_id, history, message)
         except Exception as exc:
             logger.exception("Erro ao montar contexto do Copiloto: %s", exc)
-            ctx = self._minimal_context(message)
+            ctx = self._minimal_context(workspace_id, message)
 
         if openai_configured():
             try:
@@ -149,13 +151,15 @@ class AgentService:
 
     def suggest(
         self,
+        workspace_id: str,
         conversation_id: str,
         customer_id: str | None = None,
     ) -> dict:
         try:
-            ctx = self.context_builder.build(conversation_id, customer_id)
+            ctx = self.context_builder.build(workspace_id, conversation_id, customer_id)
             if ctx.get("lastCustomerMessage"):
                 ctx = self.context_builder.build(
+                    workspace_id,
                     conversation_id,
                     customer_id,
                     user_message=ctx.get("lastCustomerMessage"),

@@ -4,8 +4,13 @@ from app.services.supabase_service import supabase
 class CatalogRepository:
     """Leitura de catálogo sem gravação e limitada ao workspace informado."""
 
-    def contar_produtos(self) -> int:
-        resposta = supabase.table("produtos").select("id", count="exact").execute()
+    def contar_produtos(self, workspace_id: str) -> int:
+        resposta = (
+            supabase.table("produtos")
+            .select("id", count="exact")
+            .eq("workspace_id", workspace_id)
+            .execute()
+        )
         return int(resposta.count or 0)
 
     def listar_por_workspace(

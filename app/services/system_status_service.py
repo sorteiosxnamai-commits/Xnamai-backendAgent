@@ -43,12 +43,13 @@ def _check_supabase() -> dict:
         }
 
 
-def _count_customers_with_phone() -> int:
+def _count_customers_with_phone(workspace_id: str) -> int:
     try:
         rows = (
             supabase
             .table("clientes")
             .select("telefone,celular")
+            .eq("workspace_id", workspace_id)
             .execute()
             .data
             or []
@@ -70,12 +71,12 @@ class SystemStatusService:
     def __init__(self):
         self.whatsapp = WhatsAppService()
 
-    def get_status(self) -> dict:
+    def get_status(self, workspace_id: str) -> dict:
         supabase_status = _check_supabase()
-        mercos = mercos_status()
+        mercos = mercos_status(workspace_id)
         whatsapp = self.whatsapp.status()
         agent = agent_service.status()
-        customers_with_phone = _count_customers_with_phone()
+        customers_with_phone = _count_customers_with_phone(workspace_id)
 
         mercos_configured = bool(mercos.get("connected"))
         mercos_synced = int(mercos.get("syncedCustomers") or 0) > 0

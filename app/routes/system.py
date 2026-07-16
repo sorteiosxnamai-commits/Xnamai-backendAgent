@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.core.auth import requer_admin, verificar_token
+from app.core.auth import obter_workspace_context, requer_admin, verificar_token
 from app.core.billing_permissions import requer_system_admin
 from app.repositories.workspace_repository import WorkspaceRepository
 from app.services.billing_service import billing_service
@@ -17,8 +17,8 @@ class LimparDemoRequest(BaseModel):
 
 
 @router.get("/sistema/status")
-def get_system_status(autorizado=Depends(verificar_token)):
-    return system_status_service.get_status()
+def get_system_status(workspace=Depends(obter_workspace_context)):
+    return system_status_service.get_status(workspace["workspaceId"])
 
 
 @router.post("/sistema/limpar-demo")

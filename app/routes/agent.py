@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from app.core.auth import verificar_token
+from app.core.auth import obter_workspace_context, verificar_token
 from app.services.agent_service import agent_service
 
 router = APIRouter()
@@ -32,9 +32,9 @@ def agent_context(
     conversationId: str | None = None,
     customerId: str | None = None,
     message: str | None = None,
-    autorizado=Depends(verificar_token),
+    workspace=Depends(obter_workspace_context),
 ):
-    ctx = agent_service.build_context(conversationId, customerId, user_message=message)
+    ctx = agent_service.build_context(workspace["workspaceId"], conversationId, customerId, user_message=message)
     return {
         "conversation": ctx.get("conversation"),
         "customer": ctx.get("customer"),
@@ -52,8 +52,9 @@ def agent_context(
 
 
 @router.post("/agent/chat")
-def agent_chat(body: AgentChatRequest, autorizado=Depends(verificar_token)):
+def agent_chat(body: AgentChatRequest, workspace=Depends(obter_workspace_context)):
     return agent_service.chat(
+        workspace_id=workspace["workspaceId"],
         message=body.message,
         conversation_id=body.conversationId,
         customer_id=body.customerId,
@@ -63,8 +64,8 @@ def agent_chat(body: AgentChatRequest, autorizado=Depends(verificar_token)):
 
 
 @router.post("/agent/suggest")
-def agent_suggest(body: AgentSuggestRequest, autorizado=Depends(verificar_token)):
-    return agent_service.suggest(body.conversationId, body.customerId)
+def agent_suggest(body: AgentSuggestRequest, workspace=Depends(obter_workspace_context)):
+    return agent_service.suggest(workspace["workspaceId"], body.conversationId, body.customerId)
 
 
 @router.post("/agent/restart")

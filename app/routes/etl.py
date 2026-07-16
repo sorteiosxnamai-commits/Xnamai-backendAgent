@@ -28,6 +28,10 @@ def executar_etl(
     O agente de vendas lê apenas o Supabase — não martela a API Mercos.
     """
     _validar_token(token)
+    raise HTTPException(
+        status_code=503,
+        detail="ETL bloqueado: a execucao precisa de um workspace autenticado.",
+    )
     try:
         return etl_service.executar(job)
     except ValueError as exc:
