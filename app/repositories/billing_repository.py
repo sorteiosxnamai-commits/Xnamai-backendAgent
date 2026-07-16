@@ -69,3 +69,19 @@ class BillingRepository:
     def uso_periodo(self, workspace_id: str, period_key: str) -> list[dict]:
         response = supabase.table("workspace_usage_counters").select("metric,used_value").eq("workspace_id", workspace_id).eq("period_key", period_key).execute()
         return response.data or []
+
+    def registrar_uso(self, workspace_id: str, metric: str, period_key: str, value: int) -> dict:
+        response = (
+            supabase.table("workspace_usage_counters")
+            .upsert(
+                {"workspace_id": workspace_id, "metric": metric, "period_key": period_key, "used_value": value},
+                on_conflict="workspace_id,metric,period_key",
+            )
+            .execute()
+        )
+        rows = response.data or []
+        return rows[0] if rows else {"workspace_id": workspace_id, "metric": metric, "period_key": period_key, "used_value": value}
+
+    def listar_uso(self) -> list[dict]:
+        response = supabase.table("workspace_usage_counters").select("workspace_id,metric,period_key,used_value").order("period_key", desc=True).execute()
+        return response.data or []

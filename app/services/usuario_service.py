@@ -92,6 +92,7 @@ class UsuarioService:
         *,
         actor_id: str,
         actor_role: str,
+        actor: dict | None = None,
         name: str | None = None,
         role: str | None = None,
         active: bool | None = None,
@@ -101,9 +102,17 @@ class UsuarioService:
         if not usuario:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
-        is_admin = actor_role == "admin"
+        context = workspace_service.get_current_workspace_context(actor) if actor else None
+        is_admin = bool(context and context.get("workspaceRole") in WORKSPACE_ADMIN_ROLES) or actor_role == "admin"
         if not is_admin and actor_id != usuario_id:
             raise HTTPException(status_code=403, detail="Sem permissão para alterar este usuário")
+
+        membership = self.workspace_repository.buscar_membership_ativo(usuario_id) if context else None
+        if context and (not membership or str(membership.get("workspace_id")) != context["workspaceId"]):
+            raise HTTPException(status_code=404, detail="Usuário não pertence a este workspace")
+        current_workspace_role = membership.get("role") if membership else None
+        if context and context.get("workspaceRole") == "admin" and current_workspace_role == "owner":
+            raise HTTPException(status_code=403, detail="Admin não pode alterar o owner do workspace")
 
         dados: dict = {}
 
@@ -118,6 +127,8 @@ class UsuarioService:
                 perfil = role.strip().lower()
                 if perfil not in PERFIS_VALIDOS:
                     raise HTTPException(status_code=400, detail="Perfil inválido")
+                if context and context.get("workspaceRole") == "admin" and perfil == "admin":
+                    raise HTTPException(status_code=403, detail="Admin não pode elevar outro membro a admin")
                 dados["perfil"] = perfil
 
             if active is not None:
@@ -127,6 +138,11 @@ class UsuarioService:
                         detail="Você não pode desativar sua própria conta",
                     )
                 dados["ativo"] = active
+
+            if context and current_workspace_role == "owner" and (active is False or role in {"user", "vendedor", "supervisor"}):
+                owners = [row for row in self.workspace_repository.listar_members_workspace(context["workspaceId"]) if row.get("role") == "owner"]
+                if len(owners) <= 1:
+                    raise HTTPException(status_code=409, detail="O último owner precisa transferir a propriedade antes de sair")
 
         if not dados:
             return self._mapear(usuario)

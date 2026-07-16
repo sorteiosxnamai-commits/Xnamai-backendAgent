@@ -4,6 +4,10 @@ from app.services.supabase_service import supabase
 
 
 class WorkspaceRepository:
+    def listar_workspaces(self) -> list[dict]:
+        resposta = supabase.table("workspaces").select("*").order("created_at", desc=True).execute()
+        return resposta.data or []
+
     def buscar_membership_ativo(self, user_id: str) -> dict | None:
         resposta = (
             supabase

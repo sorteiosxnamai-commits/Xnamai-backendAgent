@@ -46,12 +46,13 @@ def criar_usuario(
 def atualizar_usuario(
     usuario_id: str,
     body: UpdateUsuarioRequest,
-    payload: dict = Depends(obter_token_payload),
+    usuario: dict = Depends(obter_usuario_atual),
 ):
     return usuario_service.atualizar(
         usuario_id,
-        actor_id=payload["sub"],
-        actor_role=payload.get("role") or "user",
+        actor_id=str(usuario.get("id")),
+        actor_role=usuario.get("perfil") or "user",
+        actor=usuario,
         name=body.name,
         role=body.role,
         active=body.active,
