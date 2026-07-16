@@ -19,7 +19,7 @@ class ProdutoService:
 
         alterado_apos = None
         if incremental:
-            alterado_apos = self.sync_logs.ultima_sincronizacao("products")
+            alterado_apos = self.sync_logs.ultima_sincronizacao(workspace_id, "products")
 
         produtos = self.mercos.listar_produtos(alterado_apos=alterado_apos)
 
@@ -50,6 +50,7 @@ class ProdutoService:
             f"({'incremental' if alterado_apos else 'completo'}; nenhum apagado)."
         )
         self.sync_logs.registrar(
+            workspace_id=workspace_id,
             tipo="products",
             mensagem=mensagem,
             quantidade=quantidade,

@@ -32,30 +32,30 @@ class FunilSyncService:
         self.repo = PlatformRepository()
         self.conversas = ConversaRepository()
 
-    def _ensure_stages(self) -> None:
-        existing = {e["id"] for e in self.repo.list_estagios()}
+    def _ensure_stages(self, workspace_id: str) -> None:
+        existing = {e["id"] for e in self.repo.list_estagios(workspace_id)}
         for stage_id, name, sort_order in DEFAULT_STAGES:
             if stage_id not in existing:
-                self.repo.create_estagio({
+                self.repo.create_estagio(workspace_id, {
                     "id": stage_id,
                     "name": name,
                     "sort_order": sort_order,
                 })
 
-    def _clear_negocios(self) -> int:
+    def _clear_negocios(self, workspace_id: str) -> int:
         from app.services.supabase_service import supabase
 
-        res = supabase.table("funil_negocios").select("*", count="exact").limit(1).execute()
+        res = supabase.table("funil_negocios").select("*", count="exact").eq("workspace_id", workspace_id).limit(1).execute()
         before = res.count if hasattr(res, "count") and res.count is not None else len(res.data or [])
         if before:
-            supabase.table("funil_negocios").delete().neq("id", SENTINEL_ID).execute()
+            supabase.table("funil_negocios").delete().eq("workspace_id", workspace_id).neq("id", SENTINEL_ID).execute()
         return before
 
-    def sincronizar(self) -> dict:
-        self._ensure_stages()
-        removed = self._clear_negocios()
+    def sincronizar(self, workspace_id: str) -> dict:
+        self._ensure_stages(workspace_id)
+        removed = self._clear_negocios(workspace_id)
 
-        pedidos_resp = listar_pedidos(page=1, page_size=500)
+        pedidos_resp = listar_pedidos(workspace_id, page=1, page_size=500)
         pedidos = pedidos_resp.get("data") or []
 
         deals_created = 0
@@ -79,8 +79,9 @@ class FunilSyncService:
             numero = pedido.get("number") or pedido.get("id")
             cliente = pedido.get("customerName") or "Cliente"
 
-            self.repo.create_negocio({
+            self.repo.create_negocio(workspace_id, {
                 "id": f"deal-ped-{pedido.get('id')}",
+                "workspace_id": workspace_id,
                 "stage_id": stage_id,
                 "title": f"Pedido #{numero}",
                 "contact": cliente,
@@ -92,7 +93,7 @@ class FunilSyncService:
 
         conversas = []
         try:
-            conversas = self.conversas.listar()
+            conversas = self.conversas.listar(workspace_id)
         except Exception as exc:
             logger.warning("Conversas indisponíveis no sync do funil: %s", exc)
 
@@ -109,8 +110,9 @@ class FunilSyncService:
             canal = conv.get("channel") or "whatsapp"
             ultima = (conv.get("last_message") or "")[:60]
 
-            self.repo.create_negocio({
+            self.repo.create_negocio(workspace_id, {
                 "id": f"deal-conv-{conv_id}",
+                "workspace_id": workspace_id,
                 "stage_id": "s1",
                 "title": ultima or f"Conversa — {nome}",
                 "contact": nome,

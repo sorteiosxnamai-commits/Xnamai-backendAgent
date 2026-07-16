@@ -13,7 +13,7 @@ class ClienteService:
     def sincronizar(self, workspace_id: str, *, incremental: bool = True):
         alterado_apos = None
         if incremental:
-            alterado_apos = self.sync_logs.ultima_sincronizacao("customers")
+            alterado_apos = self.sync_logs.ultima_sincronizacao(workspace_id, "customers")
 
         clientes = self.mercos.listar_clientes(alterado_apos=alterado_apos)
 
@@ -64,6 +64,7 @@ class ClienteService:
         cursor = MercosService.max_ultima_alteracao(clientes)
         mensagem = f"Clientes sincronizados: {quantidade}."
         self.sync_logs.registrar(
+            workspace_id=workspace_id,
             tipo="customers",
             mensagem=mensagem,
             quantidade=quantidade,

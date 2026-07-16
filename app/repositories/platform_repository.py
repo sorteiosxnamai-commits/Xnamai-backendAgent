@@ -9,12 +9,12 @@ class PlatformRepository:
         return datetime.utcnow().isoformat()
 
     # Canais
-    def list_canais(self) -> list[dict]:
-        resposta = supabase.table("canais").select("*").order("name").execute()
+    def list_canais(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("canais").select("*").eq("workspace_id", workspace_id).order("name").execute()
         return resposta.data or []
 
-    def get_canal(self, canal_id: str) -> dict | None:
-        resposta = supabase.table("canais").select("*").eq("id", canal_id).limit(1).execute()
+    def get_canal(self, workspace_id: str, canal_id: str) -> dict | None:
+        resposta = supabase.table("canais").select("*").eq("id", canal_id).eq("workspace_id", workspace_id).limit(1).execute()
         rows = resposta.data or []
         return rows[0] if rows else None
 
@@ -30,104 +30,122 @@ class PlatformRepository:
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def create_canal(self, dados: dict) -> dict:
-        resposta = supabase.table("canais").insert(dados).execute()
+    def create_canal(self, workspace_id: str, dados: dict) -> dict:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
+        payload["workspace_id"] = workspace_id
+        resposta = supabase.table("canais").insert(payload).execute()
         rows = resposta.data or []
         return rows[0] if rows else dados
 
-    def update_canal(self, canal_id: str, dados: dict) -> dict | None:
+    def update_canal(self, workspace_id: str, canal_id: str, dados: dict) -> dict | None:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
         resposta = (
             supabase
             .table("canais")
-            .update({**dados, "updated_at": self._now()})
+            .update({**payload, "updated_at": self._now()})
             .eq("id", canal_id)
+            .eq("workspace_id", workspace_id)
             .execute()
         )
         rows = resposta.data or []
         return rows[0] if rows else None
 
     # Funil
-    def list_estagios(self) -> list[dict]:
-        resposta = supabase.table("funil_estagios").select("*").order("sort_order").execute()
+    def list_estagios(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("funil_estagios").select("*").eq("workspace_id", workspace_id).order("sort_order").execute()
         return resposta.data or []
 
-    def list_negocios(self) -> list[dict]:
-        resposta = supabase.table("funil_negocios").select("*").execute()
+    def list_negocios(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("funil_negocios").select("*").eq("workspace_id", workspace_id).execute()
         return resposta.data or []
 
-    def get_negocio(self, negocio_id: str) -> dict | None:
-        resposta = supabase.table("funil_negocios").select("*").eq("id", negocio_id).limit(1).execute()
+    def get_negocio(self, workspace_id: str, negocio_id: str) -> dict | None:
+        resposta = supabase.table("funil_negocios").select("*").eq("workspace_id", workspace_id).eq("id", negocio_id).limit(1).execute()
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def update_negocio(self, negocio_id: str, dados: dict) -> dict | None:
+    def update_negocio(self, workspace_id: str, negocio_id: str, dados: dict) -> dict | None:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
         resposta = (
             supabase
             .table("funil_negocios")
-            .update({**dados, "updated_at": self._now()})
+            .update({**payload, "updated_at": self._now()})
+            .eq("workspace_id", workspace_id)
             .eq("id", negocio_id)
             .execute()
         )
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def create_estagio(self, dados: dict) -> dict:
-        resposta = supabase.table("funil_estagios").insert(dados).execute()
+    def create_estagio(self, workspace_id: str, dados: dict) -> dict:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
+        payload["workspace_id"] = workspace_id
+        resposta = supabase.table("funil_estagios").insert(payload).execute()
         rows = resposta.data or []
         return rows[0] if rows else dados
 
-    def create_negocio(self, dados: dict) -> dict:
-        resposta = supabase.table("funil_negocios").insert(dados).execute()
+    def create_negocio(self, workspace_id: str, dados: dict) -> dict:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
+        payload["workspace_id"] = workspace_id
+        resposta = supabase.table("funil_negocios").insert(payload).execute()
         rows = resposta.data or []
         return rows[0] if rows else dados
 
     # Campanhas
-    def list_campanhas(self) -> list[dict]:
-        resposta = supabase.table("campanhas").select("*").order("created_at", desc=True).execute()
+    def list_campanhas(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("campanhas").select("*").eq("workspace_id", workspace_id).order("created_at", desc=True).execute()
         return resposta.data or []
 
-    def create_campanha(self, dados: dict) -> dict:
-        resposta = supabase.table("campanhas").insert(dados).execute()
+    def create_campanha(self, workspace_id: str, dados: dict) -> dict:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
+        payload["workspace_id"] = workspace_id
+        resposta = supabase.table("campanhas").insert(payload).execute()
         rows = resposta.data or []
         return rows[0] if rows else dados
 
-    def get_campanha(self, campanha_id: str) -> dict | None:
-        resposta = supabase.table("campanhas").select("*").eq("id", campanha_id).limit(1).execute()
+    def get_campanha(self, workspace_id: str, campanha_id: str) -> dict | None:
+        resposta = supabase.table("campanhas").select("*").eq("id", campanha_id).eq("workspace_id", workspace_id).limit(1).execute()
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def update_campanha(self, campanha_id: str, dados: dict) -> dict | None:
+    def update_campanha(self, workspace_id: str, campanha_id: str, dados: dict) -> dict | None:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
         resposta = (
             supabase
             .table("campanhas")
-            .update(dados)
+            .update(payload)
             .eq("id", campanha_id)
+            .eq("workspace_id", workspace_id)
             .execute()
         )
         rows = resposta.data or []
         return rows[0] if rows else None
 
     # Chatbot
-    def list_chatbots(self) -> list[dict]:
-        resposta = supabase.table("chatbot_fluxos").select("*").order("name").execute()
+    def list_chatbots(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("chatbot_fluxos").select("*").eq("workspace_id", workspace_id).order("name").execute()
         return resposta.data or []
 
-    def get_chatbot(self, flow_id: str) -> dict | None:
-        resposta = supabase.table("chatbot_fluxos").select("*").eq("id", flow_id).limit(1).execute()
+    def get_chatbot(self, workspace_id: str, flow_id: str) -> dict | None:
+        resposta = supabase.table("chatbot_fluxos").select("*").eq("id", flow_id).eq("workspace_id", workspace_id).limit(1).execute()
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def create_chatbot(self, dados: dict) -> dict:
-        resposta = supabase.table("chatbot_fluxos").insert(dados).execute()
+    def create_chatbot(self, workspace_id: str, dados: dict) -> dict:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
+        payload["workspace_id"] = workspace_id
+        resposta = supabase.table("chatbot_fluxos").insert(payload).execute()
         rows = resposta.data or []
         return rows[0] if rows else dados
 
-    def update_chatbot(self, flow_id: str, dados: dict) -> dict | None:
+    def update_chatbot(self, workspace_id: str, flow_id: str, dados: dict) -> dict | None:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
         resposta = (
             supabase
             .table("chatbot_fluxos")
-            .update({**dados, "updated_at": self._now()})
+            .update({**payload, "updated_at": self._now()})
             .eq("id", flow_id)
+            .eq("workspace_id", workspace_id)
             .execute()
         )
         rows = resposta.data or []
@@ -166,21 +184,23 @@ class PlatformRepository:
         return self.update_chatbot(flow_id, dados)
 
     # Integrações
-    def list_integracoes(self) -> list[dict]:
-        resposta = supabase.table("integracoes").select("*").order("name").execute()
+    def list_integracoes(self, workspace_id: str) -> list[dict]:
+        resposta = supabase.table("integracoes").select("*").eq("workspace_id", workspace_id).order("name").execute()
         return resposta.data or []
 
-    def get_integracao(self, integration_id: str) -> dict | None:
-        resposta = supabase.table("integracoes").select("*").eq("id", integration_id).limit(1).execute()
+    def get_integracao(self, workspace_id: str, integration_id: str) -> dict | None:
+        resposta = supabase.table("integracoes").select("*").eq("id", integration_id).eq("workspace_id", workspace_id).limit(1).execute()
         rows = resposta.data or []
         return rows[0] if rows else None
 
-    def update_integracao(self, integration_id: str, dados: dict) -> dict | None:
+    def update_integracao(self, workspace_id: str, integration_id: str, dados: dict) -> dict | None:
+        payload = {key: value for key, value in dados.items() if key != "workspace_id"}
         resposta = (
             supabase
             .table("integracoes")
-            .update({**dados, "updated_at": self._now()})
+            .update({**payload, "updated_at": self._now()})
             .eq("id", integration_id)
+            .eq("workspace_id", workspace_id)
             .execute()
         )
         rows = resposta.data or []

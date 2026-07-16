@@ -75,7 +75,7 @@ class SystemStatusService:
         supabase_status = _check_supabase()
         mercos = mercos_status(workspace_id)
         whatsapp = self.whatsapp.status()
-        agent = agent_service.status()
+        agent = agent_service.status(workspace_id)
         customers_with_phone = _count_customers_with_phone(workspace_id)
 
         mercos_configured = bool(mercos.get("connected"))

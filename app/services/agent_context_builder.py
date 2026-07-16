@@ -49,7 +49,7 @@ class AgentContextBuilder:
         all_conversations: list[dict] = []
 
         try:
-            all_conversations = self.conversas.listar_conversas()
+            all_conversations = self.conversas.listar_conversas(workspace_id)
         except Exception:
             all_conversations = []
 
@@ -58,7 +58,7 @@ class AgentContextBuilder:
             if conversation:
                 customer_id = customer_id or conversation.get("customerId")
                 try:
-                    conversation_messages = self.conversas.listar_mensagens(conversation_id)
+                    conversation_messages = self.conversas.listar_mensagens(workspace_id, conversation_id)
                 except Exception:
                     conversation_messages = []
 
@@ -271,8 +271,8 @@ class AgentContextBuilder:
 
                 sync_repo = MercosSyncRepository()
                 stats["lastMercosSync"] = (
-                    sync_repo.ultima_sincronizacao("orders")
-                    or sync_repo.ultima_sincronizacao("all")
+                    sync_repo.ultima_sincronizacao(workspace_id, "orders")
+                    or sync_repo.ultima_sincronizacao(workspace_id, "all")
                 )
             except Exception:
                 stats["lastMercosSync"] = None

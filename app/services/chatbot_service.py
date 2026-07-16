@@ -58,7 +58,7 @@ class ChatbotService:
 
         if not conversa.get("bot_activated"):
             triggers_delta = 1
-            self.conversas.atualizar(conversa_id, {
+            self.conversas.atualizar(str(conversa.get("workspace_id") or ""), conversa_id, {
                 "bot_flow_id": flow_id,
                 "bot_activated": True,
             })
@@ -75,9 +75,10 @@ class ChatbotService:
         message: str,
         channel: str,
         *,
+        workspace_id: str,
         flow_id: str | None = None,
     ) -> dict | None:
-        conversa = self.conversas.obter(conversa_id)
+        conversa = self.conversas.obter(workspace_id, conversa_id)
         if not conversa:
             return None
 
@@ -87,7 +88,7 @@ class ChatbotService:
         if conversa.get("assigned_to"):
             return None
 
-        messages = self.mensagens.listar_por_conversa(conversa_id)
+        messages = self.mensagens.listar_por_conversa(workspace_id, conversa_id)
         if self._human_agent_active(messages):
             return None
 
@@ -128,7 +129,7 @@ class ChatbotService:
             return None
 
         try:
-            self.conversas_service.enviar_mensagem(conversa_id, reply, sender="ai")
+            self.conversas_service.enviar_mensagem(workspace_id, conversa_id, reply, sender="ai")
         except Exception as exc:
             logger.warning("Chatbot nao enviou resposta (%s): %s", conversa_id, exc)
             return None
@@ -149,6 +150,7 @@ class ChatbotService:
         self,
         flow_id: str,
         *,
+        workspace_id: str,
         conversation_id: str | None = None,
         message: str | None = None,
     ) -> dict:
@@ -161,11 +163,11 @@ class ChatbotService:
 
         conversa = None
         if conversation_id:
-            conversa = self.conversas.obter(conversation_id)
+            conversa = self.conversas.obter(workspace_id, conversation_id)
 
         # Teste sempre usa conversa nova, sem atendente humano (reuso quebrava com assigned_to)
         if not conversa:
-            conversa = self.conversas.criar({
+            conversa = self.conversas.criar(workspace_id, {
                 "customer_name": "Cliente Teste Robô",
                 "channel": channel,
                 "status": "active",
@@ -177,13 +179,13 @@ class ChatbotService:
 
         conversa_id = str(conversa["id"])
 
-        self.mensagens.criar({
+        self.mensagens.criar(workspace_id, {
             "conversa_id": conversa_id,
             "content": test_message,
             "sender": "customer",
             "status": "delivered",
         })
-        self.conversas.atualizar(conversa_id, {
+        self.conversas.atualizar(workspace_id, conversa_id, {
             "last_message": test_message,
             "last_message_at": conversa.get("last_message_at"),
             "status": "active",
@@ -193,6 +195,7 @@ class ChatbotService:
             conversa_id,
             test_message,
             channel,
+            workspace_id=workspace_id,
             flow_id=flow_id,
         )
 

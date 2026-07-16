@@ -113,7 +113,7 @@ class PedidoService:
     def sincronizar(self, workspace_id: str, *, incremental: bool = True) -> dict:
         alterado_apos = None
         if incremental:
-            alterado_apos = self.sync_logs.ultima_sincronizacao("orders")
+            alterado_apos = self.sync_logs.ultima_sincronizacao(workspace_id, "orders")
 
         pedidos = self.mercos.listar_pedidos(alterado_apos=alterado_apos)
 
@@ -139,6 +139,7 @@ class PedidoService:
             mensagem += f" Receita retida: R$ {resumo['retainedRevenue']:,.2f}.".replace(",", "X").replace(".", ",").replace("X", ".")
 
         self.sync_logs.registrar(
+            workspace_id=workspace_id,
             tipo="orders",
             mensagem=mensagem,
             quantidade=quantidade,

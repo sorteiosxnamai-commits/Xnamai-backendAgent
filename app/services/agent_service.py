@@ -23,9 +23,9 @@ class AgentService:
             return f"OpenAI {OPENAI_MODEL}{suffix}"
         return "Modo local (regex + dados Supabase)"
 
-    def status(self) -> dict:
+    def status(self, workspace_id: str) -> dict:
         try:
-            total = len(self.conversas.listar_conversas())
+            total = len(self.conversas.listar_conversas(workspace_id))
         except Exception:
             total = 0
         gpt = openai_configured()

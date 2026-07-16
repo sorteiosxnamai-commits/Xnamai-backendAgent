@@ -23,8 +23,8 @@ class AgentSuggestRequest(BaseModel):
 
 
 @router.get("/agent/status")
-def agent_status(autorizado=Depends(verificar_token)):
-    return agent_service.status()
+def agent_status(workspace=Depends(obter_workspace_context)):
+    return agent_service.status(workspace["workspaceId"])
 
 
 @router.get("/agent/context")

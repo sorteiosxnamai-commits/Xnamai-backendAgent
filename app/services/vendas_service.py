@@ -50,10 +50,10 @@ class VendasService:
         except Exception:
             return []
 
-    def _load_funil(self) -> list[dict]:
+    def _load_funil(self, workspace_id: str) -> list[dict]:
         try:
-            estagios = self.platform.list_estagios()
-            negocios = self.platform.list_negocios()
+            estagios = self.platform.list_estagios(workspace_id)
+            negocios = self.platform.list_negocios(workspace_id)
         except Exception:
             return []
 
@@ -207,7 +207,7 @@ class VendasService:
 
     def _calcular_metricas(self, workspace_id: str) -> dict:
         pedidos = self._load_pedidos(workspace_id)
-        funil_estagios = self._load_funil()
+        funil_estagios = self._load_funil(workspace_id)
 
         by_status: dict[str, list[dict]] = defaultdict(list)
         for pedido in pedidos:
@@ -236,7 +236,7 @@ class VendasService:
         ticket_medio = valor_total_vendido / quantidade_vendas if quantidade_vendas else 0
 
         try:
-            conversas = self.conversas.listar()
+            conversas = self.conversas.listar(workspace_id)
             conversas_total = len(conversas)
         except Exception:
             conversas_total = 0

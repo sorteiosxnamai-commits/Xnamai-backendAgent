@@ -38,22 +38,23 @@ class WhatsAppService:
         phone_id = (canal or {}).get("phone_number_id") or META_PHONE_NUMBER_ID
         return WhatsAppMetaProvider(access_token=token, phone_number_id=phone_id)
 
-    def _resolve_canal(self, phone_number_id: str | None = None) -> dict | None:
+    def _resolve_canal(self, phone_number_id: str | None = None, workspace_id: str | None = None) -> dict | None:
         if phone_number_id:
             canal = self.canais.get_canal_by_phone_number_id(phone_number_id)
             if canal:
                 return canal
 
-        canais = self.canais.list_canais()
-        whatsapp = [c for c in canais if c.get("type") == "whatsapp"]
-        if not whatsapp:
+        if not workspace_id:
             return None
-
+        canais = self.canais.list_canais(workspace_id)
+        whatsapp = [c for c in canais if c.get("type") == "whatsapp"]
         active = [c for c in whatsapp if c.get("provider_status") == "active" or c.get("connected")]
-        return (active or whatsapp)[0]
+        return active[0] if len(active) == 1 else None
 
-    def status(self) -> dict:
+    def status(self, workspace_id: str) -> dict:
         canal = self._resolve_canal(META_PHONE_NUMBER_ID)
+        if canal and str(canal.get("workspace_id") or "") != workspace_id:
+            canal = None
         provider = self._provider_for_canal(canal)
         test = provider.testar_conexao() if provider.configurado() else {"ok": False, "message": "Não configurado"}
 
@@ -72,6 +73,7 @@ class WhatsAppService:
     def conectar_canal(
         self,
         *,
+        workspace_id: str,
         name: str,
         phone_number_id: str | None = None,
         access_token: str | None = None,
@@ -98,20 +100,24 @@ class WhatsAppService:
         }
 
         if canal_existente:
-            row = self.canais.update_canal(canal_existente["id"], dados)
+            if str(canal_existente.get("workspace_id") or "") != workspace_id:
+                raise ValueError("Canal não pertence ao workspace atual")
+            row = self.canais.update_canal(workspace_id, canal_existente["id"], dados)
         else:
             dados["id"] = f"ch-wa-{uuid.uuid4().hex[:8]}"
             dados["messages_today"] = 0
-            row = self.canais.create_canal(dados)
+            row = self.canais.create_canal(workspace_id, dados)
 
         return self._map_canal_publico(row or dados)
 
-    def testar_conexao(self) -> dict:
-        canal = self._resolve_canal()
+    def testar_conexao(self, workspace_id: str) -> dict:
+        canal = self._resolve_canal(workspace_id=workspace_id)
+        if canal and str(canal.get("workspace_id") or "") != workspace_id:
+            return {"ok": False, "message": "Canal não pertence ao workspace atual"}
         provider = self._provider_for_canal(canal)
         result = provider.testar_conexao()
         if result.get("ok") and canal:
-            self.canais.update_canal(canal["id"], {
+            self.canais.update_canal(workspace_id, canal["id"], {
                 "connected": True,
                 "provider_status": "active",
                 "display_phone": result.get("displayPhone") or canal.get("display_phone"),
@@ -138,6 +144,10 @@ class WhatsAppService:
                 if not canal:
                     logger.warning("Webhook WhatsApp sem canal para phone_number_id=%s", phone_number_id)
                     continue
+                workspace_id = str(canal.get("workspace_id") or "").strip()
+                if not workspace_id:
+                    logger.error("Webhook WhatsApp rejeitado: canal sem workspace_id")
+                    continue
 
                 contacts = {
                     c.get("wa_id"): (c.get("profile") or {}).get("name")
@@ -145,16 +155,11 @@ class WhatsAppService:
                 }
 
                 for message in value.get("messages") or []:
-                    if self._processar_mensagem_inbound(canal, message, contacts):
+                    if self._processar_mensagem_inbound(canal, message, contacts, workspace_id):
                         processed += 1
 
                 for status in value.get("statuses") or []:
-                    self._processar_status(status)
-
-        if canal := self._resolve_canal():
-            self.canais.update_canal(canal["id"], {
-                "last_activity": datetime.utcnow().isoformat(),
-            })
+                    self._processar_status(status, workspace_id)
 
         return {"processed": processed}
 
@@ -163,9 +168,10 @@ class WhatsAppService:
         canal: dict,
         message: dict,
         contacts: dict[str, str | None],
+        workspace_id: str,
     ) -> bool:
         external_id = message.get("id")
-        if external_id and self.mensagens.existe_external_id(external_id):
+        if external_id and self.mensagens.existe_external_id(workspace_id, external_id):
             return False
 
         wa_id = str(message.get("from") or "")
@@ -176,11 +182,11 @@ class WhatsAppService:
         if not content:
             return False
 
-        conversa = self.conversas.obter_por_thread(str(canal["id"]), wa_id)
+        conversa = self.conversas.obter_por_thread(workspace_id, str(canal["id"]), wa_id)
         customer_name = contacts.get(wa_id) or f"WhatsApp {wa_id[-4:]}"
 
         if not conversa:
-            conversa = self.conversas.criar({
+            conversa = self.conversas.criar(workspace_id, {
                 "canal_id": str(canal["id"]),
                 "external_thread_id": wa_id,
                 "contact_phone": wa_id,
@@ -194,7 +200,7 @@ class WhatsAppService:
             })
         else:
             unread = int(conversa.get("unread_count") or 0) + 1
-            self.conversas.atualizar(str(conversa["id"]), {
+            self.conversas.atualizar(workspace_id, str(conversa["id"]), {
                 "customer_name": customer_name,
                 "unread_count": unread,
                 "last_message": content,
@@ -202,7 +208,7 @@ class WhatsAppService:
                 "status": "active",
             })
 
-        self.mensagens.criar({
+        self.mensagens.criar(workspace_id, {
             "conversa_id": str(conversa["id"]),
             "content": content,
             "sender": "customer",
@@ -215,19 +221,19 @@ class WhatsAppService:
         try:
             from app.services.chatbot_service import chatbot_service
 
-            chatbot_service.handle_inbound(str(conversa["id"]), content, "whatsapp")
+            chatbot_service.handle_inbound(str(conversa["id"]), content, "whatsapp", workspace_id=workspace_id)
         except Exception as exc:
             logger.warning("Chatbot runtime falhou no WhatsApp: %s", exc)
 
         return True
 
-    def _processar_status(self, status: dict) -> None:
+    def _processar_status(self, status: dict, workspace_id: str) -> None:
         external_id = status.get("id")
         if not external_id:
             return
         provider_status = status.get("status")
         if provider_status:
-            self.mensagens.atualizar_por_external_id(external_id, {"provider_status": provider_status})
+            self.mensagens.atualizar_por_external_id(workspace_id, external_id, {"provider_status": provider_status})
 
     def _extrair_conteudo(self, message: dict) -> str:
         msg_type = message.get("type")
@@ -244,14 +250,17 @@ class WhatsAppService:
         return f"[{msg_type or 'mensagem'} recebida]"
 
     def enviar_para_conversa(self, conversa: dict, content: str, mensagem_id: str | None = None) -> dict:
+        workspace_id = str(conversa.get("workspace_id") or "").strip()
+        if not workspace_id:
+            return {"sent": False, "reason": "Conversa sem workspace validado"}
         phone = conversa.get("contact_phone") or conversa.get("external_thread_id")
         if not phone:
             return {"sent": False, "reason": "Conversa sem telefone"}
 
         canal = None
         if conversa.get("canal_id"):
-            canal = self.canais.get_canal(str(conversa["canal_id"]))
-        canal = canal or self._resolve_canal()
+            canal = self.canais.get_canal(str(conversa.get("workspace_id") or ""), str(conversa["canal_id"]))
+        canal = canal or self._resolve_canal(workspace_id=workspace_id)
 
         provider = self._provider_for_canal(canal)
         if not provider.configurado() or not (canal or {}).get("connected", True):
@@ -262,7 +271,7 @@ class WhatsAppService:
         except Exception as exc:
             logger.exception("Falha ao enviar WhatsApp: %s", exc)
             if mensagem_id:
-                self.mensagens.atualizar(mensagem_id, {
+                self.mensagens.atualizar(workspace_id, mensagem_id, {
                     "status": "failed",
                     "provider_status": "failed",
                 })
@@ -271,14 +280,14 @@ class WhatsAppService:
         messages = (resposta.get("messages") or [{}])
         external_id = messages[0].get("id")
         if mensagem_id and external_id:
-            self.mensagens.atualizar(mensagem_id, {
+            self.mensagens.atualizar(workspace_id, mensagem_id, {
                 "external_id": external_id,
                 "provider_status": "sent",
                 "status": "sent",
             })
 
         if canal:
-            self.canais.update_canal(canal["id"], {
+            self.canais.update_canal(workspace_id, canal["id"], {
                 "last_activity": datetime.utcnow().isoformat(),
             })
 

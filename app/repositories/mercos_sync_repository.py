@@ -8,6 +8,7 @@ class MercosSyncRepository:
     def registrar(
         self,
         *,
+        workspace_id: str,
         tipo: str,
         mensagem: str,
         status: str = "success",
@@ -20,6 +21,7 @@ class MercosSyncRepository:
             payload_resumo["cursor_ultima_alteracao"] = cursor_ultima_alteracao
 
         payload = {
+            "workspace_id": workspace_id,
             "tipo": tipo,
             "status": status,
             "mensagem": mensagem,
@@ -34,7 +36,7 @@ class MercosSyncRepository:
         except Exception:
             return None
 
-    def ultima_sincronizacao(self, tipo: str) -> str | None:
+    def ultima_sincronizacao(self, workspace_id: str, tipo: str) -> str | None:
         """Cursor preferencial: maior ultima_alteracao da Mercos salva no resumo.
 
         Fallback: created_at do último log de sucesso (compatível com logs antigos).
@@ -44,6 +46,7 @@ class MercosSyncRepository:
                 supabase
                 .table("mercos_sync_logs")
                 .select("created_at,resumo")
+                .eq("workspace_id", workspace_id)
                 .eq("tipo", tipo)
                 .eq("status", "success")
                 .order("created_at", desc=True)
@@ -63,12 +66,13 @@ class MercosSyncRepository:
         except Exception:
             return None
 
-    def listar_recentes(self, limite: int = 10) -> list[dict]:
+    def listar_recentes(self, workspace_id: str, limite: int = 10) -> list[dict]:
         try:
             resposta = (
                 supabase
                 .table("mercos_sync_logs")
                 .select("*")
+                .eq("workspace_id", workspace_id)
                 .order("created_at", desc=True)
                 .limit(limite)
                 .execute()

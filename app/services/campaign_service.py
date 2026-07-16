@@ -41,12 +41,12 @@ class CampaignService:
         self.clientes = ClienteRepository()
         self.whatsapp = WhatsAppService()
 
-    def _destinatarios(self, limite: int) -> list[dict]:
+    def _destinatarios(self, workspace_id: str, limite: int) -> list[dict]:
         vistos: set[str] = set()
         destinatarios: list[dict] = []
 
         try:
-            rows = self.clientes.listar_com_telefone(limite if limite > 0 else None)
+            rows = self.clientes.listar_com_telefone(workspace_id, limite if limite > 0 else None)
         except Exception as exc:
             logger.warning("Falha ao listar clientes para campanha: %s", exc)
             rows = []
@@ -71,6 +71,7 @@ class CampaignService:
                 supabase
                 .table("conversas")
                 .select("contact_phone,external_thread_id,customer_name")
+                .eq("workspace_id", workspace_id)
                 .eq("channel", "whatsapp")
                 .execute()
                 .data
@@ -96,8 +97,8 @@ class CampaignService:
 
         return destinatarios
 
-    def disparar(self, campanha_id: str) -> dict:
-        campanha = self.campanhas.get_campanha(campanha_id)
+    def disparar(self, workspace_id: str, campanha_id: str) -> dict:
+        campanha = self.campanhas.get_campanha(workspace_id, campanha_id)
         if not campanha:
             raise HTTPException(status_code=404, detail="Campanha não encontrada")
 
@@ -121,7 +122,7 @@ class CampaignService:
                 detail="Defina a mensagem da campanha antes de disparar.",
             )
 
-        canal = self.whatsapp._resolve_canal()
+        canal = self.whatsapp._resolve_canal(workspace_id=workspace_id)
         provider = self.whatsapp._provider_for_canal(canal)
         if not provider.configurado() or not (canal or {}).get("connected", True):
             raise HTTPException(
@@ -130,7 +131,7 @@ class CampaignService:
             )
 
         limite = int(campanha.get("recipients") or 0)
-        destinatarios = self._destinatarios(limite)
+        destinatarios = self._destinatarios(workspace_id, limite)
         if not destinatarios:
             raise HTTPException(
                 status_code=400,
@@ -140,7 +141,7 @@ class CampaignService:
                 ),
             )
 
-        self.campanhas.update_campanha(campanha_id, {
+        self.campanhas.update_campanha(workspace_id, campanha_id, {
             "status": "running",
             "recipients": len(destinatarios),
             "sent": 0,
@@ -170,7 +171,7 @@ class CampaignService:
             time.sleep(0.15)
 
         status_final = "completed" if enviados > 0 else "draft"
-        atualizado = self.campanhas.update_campanha(campanha_id, {
+        atualizado = self.campanhas.update_campanha(workspace_id, campanha_id, {
             "status": status_final,
             "sent": enviados,
             "failed": falhas,
@@ -180,7 +181,7 @@ class CampaignService:
         }) or campanha
 
         if canal:
-            self.campanhas.update_canal(canal["id"], {
+            self.campanhas.update_canal(workspace_id, canal["id"], {
                 "last_activity": datetime.utcnow().isoformat(),
             })
 

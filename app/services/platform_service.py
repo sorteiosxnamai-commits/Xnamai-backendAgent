@@ -111,11 +111,11 @@ class PlatformService:
         raise
 
     # Canais
-    def get_channels(self) -> list[dict]:
+    def get_channels(self, workspace_id: str) -> list[dict]:
         self._ensure_tables()
         try:
-            rows = self.repo.list_canais()
-            msg_counts = self._messages_today_by_channel_type()
+            rows = self.repo.list_canais(workspace_id)
+            msg_counts = self._messages_today_by_channel_type(workspace_id)
         except Exception as exc:
             self._handle_db_error(exc)
         result = []
@@ -125,11 +125,11 @@ class PlatformService:
             result.append(item)
         return result
 
-    def _messages_today_by_channel_type(self) -> dict[str, int]:
+    def _messages_today_by_channel_type(self, workspace_id: str) -> dict[str, int]:
         hoje = datetime.utcnow().date()
         try:
-            conversas = supabase.table("conversas").select("id,channel").execute().data or []
-            mensagens = supabase.table("mensagens").select("conversa_id,created_at").execute().data or []
+            conversas = supabase.table("conversas").select("id,channel").eq("workspace_id", workspace_id).execute().data or []
+            mensagens = supabase.table("mensagens").select("conversa_id,created_at").eq("workspace_id", workspace_id).execute().data or []
         except Exception:
             return {}
 
@@ -151,7 +151,7 @@ class PlatformService:
 
         return dict(counts)
 
-    def connect_channel(self, channel_type: str, name: str) -> dict:
+    def connect_channel(self, workspace_id: str, channel_type: str, name: str) -> dict:
         self._ensure_tables()
         connected = False
         provider_status = "pending"
@@ -160,7 +160,7 @@ class PlatformService:
         if channel_type == "whatsapp":
             from app.services.whatsapp_service import whatsapp_service
 
-            status = whatsapp_service.status()
+            status = whatsapp_service.status(workspace_id)
             connected = bool(status.get("connected"))
             provider_status = status.get("providerStatus") or ("active" if connected else "pending")
             provider = "meta"
@@ -176,12 +176,12 @@ class PlatformService:
             "last_activity": datetime.utcnow().isoformat(),
         }
         try:
-            row = self.repo.create_canal(dados)
+            row = self.repo.create_canal(workspace_id, dados)
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_canal(row)
 
-    def update_channel(self, channel_id: str, patch: dict) -> dict | None:
+    def update_channel(self, workspace_id: str, channel_id: str, patch: dict) -> dict | None:
         self._ensure_tables()
         db_patch = {}
         if "name" in patch:
@@ -191,20 +191,20 @@ class PlatformService:
         if "connected" in patch:
             db_patch["connected"] = patch["connected"]
         if not db_patch:
-            return _map_canal(self.repo.get_canal(channel_id)) if self.repo.get_canal(channel_id) else None
+            return _map_canal(self.repo.get_canal(workspace_id, channel_id)) if self.repo.get_canal(workspace_id, channel_id) else None
         try:
-            row = self.repo.update_canal(channel_id, db_patch)
+            row = self.repo.update_canal(workspace_id, channel_id, db_patch)
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_canal(row) if row else None
 
-    def toggle_channel(self, channel_id: str) -> dict | None:
+    def toggle_channel(self, workspace_id: str, channel_id: str) -> dict | None:
         self._ensure_tables()
-        canal = self.repo.get_canal(channel_id)
+        canal = self.repo.get_canal(workspace_id, channel_id)
         if not canal:
             return None
         try:
-            row = self.repo.update_canal(channel_id, {
+            row = self.repo.update_canal(workspace_id, channel_id, {
                 "connected": not bool(canal.get("connected")),
                 "last_activity": datetime.utcnow().isoformat(),
             })
@@ -213,11 +213,11 @@ class PlatformService:
         return _map_canal(row) if row else None
 
     # Funil
-    def get_funnel(self) -> list[dict]:
+    def get_funnel(self, workspace_id: str) -> list[dict]:
         self._ensure_tables()
         try:
-            estagios = self.repo.list_estagios()
-            negocios = self.repo.list_negocios()
+            estagios = self.repo.list_estagios(workspace_id)
+            negocios = self.repo.list_negocios(workspace_id)
         except Exception as exc:
             self._handle_db_error(exc)
 
@@ -242,30 +242,30 @@ class PlatformService:
             for estagio in estagios
         ]
 
-    def move_deal(self, deal_id: str, stage_id: str) -> bool:
+    def move_deal(self, workspace_id: str, deal_id: str, stage_id: str) -> bool:
         self._ensure_tables()
-        negocio = self.repo.get_negocio(deal_id)
+        negocio = self.repo.get_negocio(workspace_id, deal_id)
         if not negocio:
             return False
-        estagios = {str(e["id"]) for e in self.repo.list_estagios()}
+        estagios = {str(e["id"]) for e in self.repo.list_estagios(workspace_id)}
         if stage_id not in estagios:
             return False
         try:
-            row = self.repo.update_negocio(deal_id, {"stage_id": stage_id})
+            row = self.repo.update_negocio(workspace_id, deal_id, {"stage_id": stage_id})
         except Exception as exc:
             self._handle_db_error(exc)
         return row is not None
 
     # Campanhas
-    def get_campaigns(self) -> list[dict]:
+    def get_campaigns(self, workspace_id: str) -> list[dict]:
         self._ensure_tables()
         try:
-            rows = self.repo.list_campanhas()
+            rows = self.repo.list_campanhas(workspace_id)
         except Exception as exc:
             self._handle_db_error(exc)
         return [_map_campanha(row) for row in rows]
 
-    def add_campaign(self, campaign: dict) -> dict:
+    def add_campaign(self, workspace_id: str, campaign: dict) -> dict:
         self._ensure_tables()
         dados = {
             "id": f"cp-{uuid.uuid4().hex[:8]}",
@@ -282,27 +282,27 @@ class PlatformService:
         if campaign.get("scheduledAt"):
             dados["scheduled_at"] = campaign["scheduledAt"]
         try:
-            row = self.repo.create_campanha(dados)
+            row = self.repo.create_campanha(workspace_id, dados)
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_campanha(row)
 
-    def dispatch_campaign(self, campaign_id: str) -> dict:
+    def dispatch_campaign(self, workspace_id: str, campaign_id: str) -> dict:
         from app.services.campaign_service import campaign_service
 
         self._ensure_tables()
-        return campaign_service.disparar(campaign_id)
+        return campaign_service.disparar(workspace_id, campaign_id)
 
     # Chatbot
-    def get_chatbots(self) -> list[dict]:
+    def get_chatbots(self, workspace_id: str) -> list[dict]:
         self._ensure_tables()
         try:
-            rows = self.repo.list_chatbots()
+            rows = self.repo.list_chatbots(workspace_id)
         except Exception as exc:
             self._handle_db_error(exc)
         return [_map_chatbot(row) for row in rows]
 
-    def add_chatbot(self, flow: dict) -> dict:
+    def add_chatbot(self, workspace_id: str, flow: dict) -> dict:
         self._ensure_tables()
         dados = {
             "id": f"bot-{uuid.uuid4().hex[:8]}",
@@ -313,23 +313,23 @@ class PlatformService:
             "resolved": 0,
         }
         try:
-            row = self.repo.create_chatbot(dados)
+            row = self.repo.create_chatbot(workspace_id, dados)
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_chatbot(row)
 
-    def toggle_chatbot(self, flow_id: str) -> dict | None:
+    def toggle_chatbot(self, workspace_id: str, flow_id: str) -> dict | None:
         self._ensure_tables()
-        flow = self.repo.get_chatbot(flow_id)
+        flow = self.repo.get_chatbot(workspace_id, flow_id)
         if not flow:
             return None
         try:
-            row = self.repo.update_chatbot(flow_id, {"active": not bool(flow.get("active"))})
+            row = self.repo.update_chatbot(workspace_id, flow_id, {"active": not bool(flow.get("active"))})
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_chatbot(row) if row else None
 
-    def update_chatbot(self, flow_id: str, patch: dict) -> dict | None:
+    def update_chatbot(self, workspace_id: str, flow_id: str, patch: dict) -> dict | None:
         self._ensure_tables()
         db_patch = {}
         if "name" in patch:
@@ -337,30 +337,30 @@ class PlatformService:
         if "active" in patch:
             db_patch["active"] = patch["active"]
         if not db_patch:
-            flow = self.repo.get_chatbot(flow_id)
+            flow = self.repo.get_chatbot(workspace_id, flow_id)
             return _map_chatbot(flow) if flow else None
         try:
-            row = self.repo.update_chatbot(flow_id, db_patch)
+            row = self.repo.update_chatbot(workspace_id, flow_id, db_patch)
         except Exception as exc:
             self._handle_db_error(exc)
         return _map_chatbot(row) if row else None
 
     # Integrações
-    def get_integrations(self) -> list[dict]:
+    def get_integrations(self, workspace_id: str) -> list[dict]:
         self._ensure_tables()
         try:
-            rows = self.repo.list_integracoes()
+            rows = self.repo.list_integracoes(workspace_id)
         except Exception as exc:
             self._handle_db_error(exc)
         return [_map_integracao(row) for row in rows]
 
-    def toggle_integration(self, integration_id: str) -> dict | None:
+    def toggle_integration(self, workspace_id: str, integration_id: str) -> dict | None:
         self._ensure_tables()
-        item = self.repo.get_integracao(integration_id)
+        item = self.repo.get_integracao(workspace_id, integration_id)
         if not item:
             return None
         try:
-            row = self.repo.update_integracao(integration_id, {
+            row = self.repo.update_integracao(workspace_id, integration_id, {
                 "connected": not bool(item.get("connected")),
             })
         except Exception as exc:

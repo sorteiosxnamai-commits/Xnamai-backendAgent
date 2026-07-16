@@ -235,7 +235,7 @@ def mercos_status(workspace_id: str) -> dict:
     pedido_service = PedidoService()
     info = mercos_info()
 
-    last_sync = sync_repo.ultima_sincronizacao("orders") or sync_repo.ultima_sincronizacao("all")
+    last_sync = sync_repo.ultima_sincronizacao(workspace_id, "orders") or sync_repo.ultima_sincronizacao(workspace_id, "all")
     resumo = pedido_service.resumo_situacoes(workspace_id)
 
     return {
@@ -254,10 +254,10 @@ def mercos_status(workspace_id: str) -> dict:
     }
 
 
-def mercos_logs() -> list:
+def mercos_logs(workspace_id: str) -> list:
     from app.repositories.mercos_sync_repository import MercosSyncRepository
 
-    logs = MercosSyncRepository().listar_recentes(12)
+    logs = MercosSyncRepository().listar_recentes(workspace_id, 12)
     if not logs:
         return [
             {

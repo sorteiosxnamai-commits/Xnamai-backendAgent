@@ -29,27 +29,34 @@ class EtlService:
         ambiente = mercos_info().get("environment") or "unknown"
         return f"[ETL/{ambiente}] "
 
-    def sincronizar_pedidos(self) -> dict:
+    def sincronizar_pedidos(self, workspace_id: str) -> dict:
         self._exigir_mercos()
-        resultado = self.pedidos.sincronizar(incremental=True)
+        resultado = self.pedidos.sincronizar(workspace_id, incremental=True)
         qtd = resultado.get("pedidos_sincronizados", 0)
         mensagem = resultado.get("mensagem") or f"{self._prefixo()}Pedidos ETL: {qtd}."
-        self.logs.registrar(tipo="etl_orders", mensagem=mensagem, quantidade=qtd, resumo=resultado.get("resumo"))
+        self.logs.registrar(
+            workspace_id=workspace_id,
+            tipo="etl_orders",
+            mensagem=mensagem,
+            quantidade=qtd,
+            resumo=resultado.get("resumo"),
+        )
         return {"job": "orders", "success": True, "message": mensagem, "pedidos_sincronizados": qtd, "resumo": resultado.get("resumo")}
 
-    def sincronizar_catalogo(self) -> dict:
+    def sincronizar_catalogo(self, workspace_id: str) -> dict:
         """Clientes + produtos — rodar 1x/dia."""
         self._exigir_mercos()
         prefix = self._prefixo()
 
-        clientes = self.clientes.sincronizar()
+        clientes = self.clientes.sincronizar(workspace_id)
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
-        produtos = self.produtos.sincronizar(incremental=False)
+        produtos = self.produtos.sincronizar(workspace_id, incremental=False)
 
         qtd_c = clientes.get("clientes_sincronizados", 0)
         qtd_p = produtos.get("produtos_sincronizados", 0)
         mensagem = f"{prefix}Catálogo ETL — clientes: {qtd_c}, produtos: {qtd_p}."
         self.logs.registrar(
+            workspace_id=workspace_id,
             tipo="etl_catalog",
             mensagem=mensagem,
             quantidade=qtd_c + qtd_p,
@@ -62,22 +69,23 @@ class EtlService:
             "produtos_sincronizados": qtd_p,
         }
 
-    def sincronizar_completo(self) -> dict:
+    def sincronizar_completo(self, workspace_id: str) -> dict:
         """Pedidos + catálogo com pausas — uso em manutenção."""
         self._exigir_mercos()
         prefix = self._prefixo()
 
-        clientes = self.clientes.sincronizar()
+        clientes = self.clientes.sincronizar(workspace_id)
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
-        produtos = self.produtos.sincronizar(incremental=False)
+        produtos = self.produtos.sincronizar(workspace_id, incremental=False)
         time.sleep(PAUSA_ENTRE_ETAPAS_SEG)
-        pedidos = self.pedidos.sincronizar(incremental=True)
+        pedidos = self.pedidos.sincronizar(workspace_id, incremental=True)
 
         qtd_c = clientes.get("clientes_sincronizados", 0)
         qtd_p = produtos.get("produtos_sincronizados", 0)
         qtd_o = pedidos.get("pedidos_sincronizados", 0)
         mensagem = f"{prefix}ETL completo — clientes: {qtd_c}, produtos: {qtd_p}, pedidos: {qtd_o}."
         self.logs.registrar(
+            workspace_id=workspace_id,
             tipo="etl_full",
             mensagem=mensagem,
             quantidade=qtd_c + qtd_p + qtd_o,
@@ -93,14 +101,14 @@ class EtlService:
             "resumo": pedidos.get("resumo"),
         }
 
-    def executar(self, job: str) -> dict:
+    def executar(self, job: str, workspace_id: str) -> dict:
         job = (job or "").strip().lower()
         if job == "orders":
-            return self.sincronizar_pedidos()
+            return self.sincronizar_pedidos(workspace_id)
         if job == "catalog":
-            return self.sincronizar_catalogo()
+            return self.sincronizar_catalogo(workspace_id)
         if job == "full":
-            return self.sincronizar_completo()
+            return self.sincronizar_completo(workspace_id)
         raise ValueError(f"Job ETL desconhecido: {job}. Use orders, catalog ou full.")
 
 
