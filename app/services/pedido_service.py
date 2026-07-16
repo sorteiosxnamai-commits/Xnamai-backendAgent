@@ -127,6 +127,7 @@ class PedidoService:
             quantidade += 1
 
         resumo = self.resumo_situacoes()
+        cursor = MercosService.max_ultima_alteracao(pedidos if isinstance(pedidos, list) else [])
         mensagem = f"Pedidos sincronizados: {quantidade}."
         if resumo["allOrdersProcessing"]:
             alvo = "Mercos" if mercos_ambiente() == "production" else "sandbox Mercos"
@@ -142,10 +143,13 @@ class PedidoService:
             mensagem=mensagem,
             quantidade=quantidade,
             resumo=resumo,
+            cursor_ultima_alteracao=cursor,
         )
 
         return {
             "mensagem": mensagem,
             "pedidos_sincronizados": quantidade,
             "resumo": resumo,
+            "cursor_ultima_alteracao": cursor,
+            "incremental": bool(alterado_apos),
         }
