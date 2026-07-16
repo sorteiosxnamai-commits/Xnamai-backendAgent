@@ -142,6 +142,16 @@ class BillingService:
         _, _, usage = self._plan_entitlements(workspace_id)
         return int(usage["values"].get(metric) or 0)
 
+    def consume_usage(self, workspace_id: str, metric: str, amount: int = 1) -> dict:
+        if metric not in ENTITLEMENT_METRICS or amount < 1:
+            raise HTTPException(status_code=422, detail="Métrica de uso inválida.")
+        if not self.action_allowed(workspace_id, metric=metric, increment=amount):
+            raise HTTPException(status_code=409, detail={"code": "PLAN_LIMIT_REACHED", "metric": metric})
+        period_key = self._period_key()
+        current = self.usage_for(workspace_id, metric)
+        updated = self.repo.registrar_uso(workspace_id, metric, period_key, current + amount)
+        return {"metric": metric, "periodKey": period_key, "used": int(updated.get("used_value") or current + amount), "limit": self.limit_for(workspace_id, metric)}
+
     def action_allowed(self, workspace_id: str, *, feature: str | None = None, metric: str | None = None, increment: int = 1) -> bool:
         subscription, plan, usage = self._plan_entitlements(workspace_id)
         if not subscription or not plan or self._effective_status(subscription) in {"expired", "canceled", "suspended"}:
